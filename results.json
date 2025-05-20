@@ -1,0 +1,82 @@
+[
+    {
+        "name": "text8",
+        "original_size": 100000000,
+        "compressed_size": 33062116,
+        "compression_ratio": 0.33062116,
+        "compression_time": 12.528567790985107,
+        "decompression_time": 1.0126025676727295
+    },
+    {
+        "name": "Romeo_and_Juliet.txt",
+        "original_size": 169541,
+        "compressed_size": 64353,
+        "compression_ratio": 0.37957190296152554,
+        "compression_time": 0.023135662078857422,
+        "decompression_time": 0.0019643306732177734
+    },
+    {
+        "name": "The_Odyssey.txt",
+        "original_size": 717826,
+        "compressed_size": 264063,
+        "compression_ratio": 0.3678649143385723,
+        "compression_time": 0.1065528392791748,
+        "decompression_time": 0.007749080657958984
+    },
+    {
+        "name": "The_Iliad.txt",
+        "original_size": 1161405,
+        "compressed_size": 449718,
+        "compression_ratio": 0.3872189287974479,
+        "compression_time": 0.17805767059326172,
+        "decompression_time": 0.010870695114135742
+    },
+    {
+        "name": "War_and_Peace.txt",
+        "original_size": 3359652,
+        "compressed_size": 1221747,
+        "compression_ratio": 0.36365284261584235,
+        "compression_time": 0.44974613189697266,
+        "decompression_time": 0.029163360595703125
+    },
+    {
+        "name": "Alice's_Adventures_in_Wonderland.txt",
+        "original_size": 174354,
+        "compressed_size": 60916,
+        "compression_ratio": 0.34938114410911136,
+        "compression_time": 0.021038055419921875,
+        "decompression_time": 0.002105236053466797
+    },
+    {
+        "name": "lunyu.txt",
+        "original_size": 68985,
+        "compressed_size": 26223,
+        "compression_ratio": 0.3801261143726897,
+        "compression_time": 0.009276151657104492,
+        "decompression_time": 0.0010776519775390625
+    },
+    {
+        "name": "Faust:_Der_Trag\u00f6die_zweiter_Teil.txt",
+        "original_size": 344911,
+        "compressed_size": 134422,
+        "compression_ratio": 0.3897295244280409,
+        "compression_time": 0.06930804252624512,
+        "decompression_time": 0.003854990005493164
+    },
+    {
+        "name": "Journey_to_the_West.txt",
+        "original_size": 2264110,
+        "compressed_size": 1001318,
+        "compression_ratio": 0.44225678081011965,
+        "compression_time": 0.35730981826782227,
+        "decompression_time": 0.0220334529876709
+    },
+    {
+        "name": "Les_mis\u00e9rables_Tome_I:_Fantine.txt",
+        "original_size": 710537,
+        "compressed_size": 266706,
+        "compression_ratio": 0.3753583557225028,
+        "compression_time": 0.08305597305297852,
+        "decompression_time": 0.0064733028411865234
+    }
+]

@@ -1,0 +1,62 @@
+[
+    {
+        "name": "text8",
+        "download_url": "http://mattmahoney.net/dc/text8.zip",
+        "path": "data/text8",
+        "size": 100000000
+    },
+    {
+        "name": "Romeo and Juliet",
+        "download_url": "https://www.gutenberg.org/cache/epub/1513/pg1513.txt",
+        "path": "data/Romeo_and_Juliet.txt",
+        "size": 169541
+    },
+    {
+        "name": "The Odyssey",
+        "download_url": "https://www.gutenberg.org/cache/epub/1727/pg1727.txt",
+        "path": "data/The_Odyssey.txt",
+        "size": 717826
+    },
+    {
+        "name": "The Iliad",
+        "download_url": "https://www.gutenberg.org/cache/epub/6130/pg6130.txt",
+        "path": "data/The_Iliad.txt",
+        "size": 1161405
+    },
+    {
+        "name": "War and Peace",
+        "download_url": "https://www.gutenberg.org/cache/epub/2600/pg2600.txt",
+        "path": "data/War_and_Peace.txt",
+        "size": 3359652
+    },
+    {
+        "name": "Alice's Adventures in Wonderland",
+        "download_url": "https://www.gutenberg.org/cache/epub/11/pg11.txt",
+        "path": "data/Alice's_Adventures_in_Wonderland.txt",
+        "size": 174354
+    },
+    {
+        "name": "The Analects",
+        "download_url": "https://www.chineseclassic.com/sites/default/files/field/image/lunyu.zip",
+        "path": "data/lunyu.txt",
+        "size": 68985
+    },
+    {
+        "name": "Faust: Der Trag\u00f6die zweiter Teil",
+        "download_url": "https://www.gutenberg.org/cache/epub/2230/pg2230.txt",
+        "path": "data/Faust:_Der_Trag\u00f6die_zweiter_Teil.txt",
+        "size": 344911
+    },
+    {
+        "name": "Journey to the West",
+        "download_url": "https://www.gutenberg.org/cache/epub/23962/pg23962.txt",
+        "path": "data/Journey_to_the_West.txt",
+        "size": 2264110
+    },
+    {
+        "name": "Les mis\u00e9rables Tome I: Fantine",
+        "download_url": "https://www.gutenberg.org/cache/epub/17489/pg17489.txt",
+        "path": "data/Les_mis\u00e9rables_Tome_I:_Fantine.txt",
+        "size": 710537
+    }
+]

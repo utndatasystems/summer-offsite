@@ -289,7 +289,9 @@ def build_cumul(prob_vec: np.ndarray, total: int = 4096) -> np.ndarray:
             if diff == 0:
                 break
 
-    assert freq.sum() == total and np.all(freq >= 1)
+    # print(f"freq.sum: {freq.sum()}, total: {total}")
+    assert freq.sum() == total
+    assert np.all(freq >= 1)
 
     cumul = np.empty(alphabet_size + 1, dtype=np.int64)
     cumul[0] = 0
@@ -302,7 +304,7 @@ class LLMCompressor:
         self.encoder = ArithmeticEncoder(32, self.bitout)
 
     def next_token(self, correct_token_idx, probs):
-        self.encoder.write(build_cumul(probs), correct_token_idx)
+        self.encoder.write(build_cumul(probs, len(probs)), correct_token_idx)
 
     def compress(self):
         self.encoder.finish()
@@ -313,7 +315,7 @@ class LLMDecompressor:
         self.decoder = ArithmeticDecoder(32, BitInputStream(code))
 
     def decompress(self, probs) -> int: # Returns one single token at a time (returns the index of the token)
-        cumul = build_cumul(probs)
+        cumul = build_cumul(probs, len(probs))
         return self.decoder.read(cumul, len(probs))
 
 def test_compress_decompress():

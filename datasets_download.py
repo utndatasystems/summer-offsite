@@ -34,7 +34,7 @@ for dataset in datasets_info:
         else:
             print(f"Downloading [{dataset['name']}].")
             response = requests.get(dataset["download_url"])
-            dataset_path = os.path.join("data", f"{dataset["name"].replace(' ', '_')}.txt")
+            dataset_path = os.path.join("data", f"{dataset['name'].replace(' ', '_')}.txt")
             with open(dataset_path, "wb") as f:
                 f.write(response.content)
             dataset["path"] = dataset_path

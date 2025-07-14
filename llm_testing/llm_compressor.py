@@ -1,6 +1,7 @@
 from string import printable
 import numpy as np
 import random
+import math
 
 class ArithmeticCoderBase(object):
     # Constructs an arithmetic coder, which initializes the code range.
@@ -260,7 +261,7 @@ class BitInputStream:
 # ------------------------------------------------------------------
 # Utility – convert probabilities → integer cumulative vector
 # ------------------------------------------------------------------
-def build_cumul(prob_vec: np.ndarray, total: int = 4096) -> np.ndarray:
+def build_cumul(prob_vec: np.ndarray, total: int = 1048576) -> np.ndarray:
     """
     Turn a length-N probability vector that sums to 1 into the length-(N+1)
     cumulative-frequency array expected by ArithmeticCoder.  Ensures every
@@ -302,20 +303,33 @@ class LLMCompressor:
     def __init__(self):
         self.bitout = BitOutputStream()
         self.encoder = ArithmeticEncoder(32, self.bitout)
+        self.cross_entropy_sum = 0.0
+        self.token_count = 0
 
     def next_token(self, correct_token_idx, probs):
-        self.encoder.write(build_cumul(probs, len(probs)), correct_token_idx)
+        # Compute cross-entropy loss for this token
+        prob = probs[correct_token_idx]
+        if prob > 0:
+            self.cross_entropy_sum += -math.log2(prob)
+        else:
+            self.cross_entropy_sum += float('inf')  # handle numerical underflow
+
+        self.token_count += 1
+        self.encoder.write(build_cumul(probs), correct_token_idx)
 
     def compress(self):
         self.encoder.finish()
         return self.bitout.get_bits()
+
+    def get_cross_entropy(self):
+        return self.cross_entropy_sum
 
 class LLMDecompressor:
     def __init__(self, code):
         self.decoder = ArithmeticDecoder(32, BitInputStream(code))
 
     def decompress(self, probs) -> int: # Returns one single token at a time (returns the index of the token)
-        cumul = build_cumul(probs, len(probs))
+        cumul = build_cumul(probs)
         return self.decoder.read(cumul, len(probs))
 
 def test_compress_decompress():

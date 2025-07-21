@@ -5,7 +5,7 @@ import math
 from pyroaring import BitMap
 
 class TokenPredictor:
-    def __init__(self, data_path=None, text_input=None, model_name="Qwen/Qwen2.5-0.5B", reduce_tokens=True, first_n_tokens=10000):
+    def __init__(self, data_path=None, text_input=None, model_name="Qwen/Qwen2.5-0.5B", reduce_tokens=True, chunk_size=None, first_n_tokens=10000):
         """
         Initializes the TokenPredictor class.
 
@@ -14,6 +14,7 @@ class TokenPredictor:
             text_input (str, optional): Direct text input.
             model_name (str): HuggingFace model name or path.
             reduce_tokens (bool): Whether to restrict the token space to distinct tokens in the input data.
+            chunk_size (int, optional): The size of token chunks for dynamic masking. If None, masking is done on the whole data.
             first_n_tokens (int): Number of initial tokens to consider if reduce_tokens is True.
         """
         if data_path is None and text_input is None:
@@ -40,27 +41,70 @@ class TokenPredictor:
             self.data = text_input
         
         print("Starting tokenization...")
-        self.data_tokens = self.tokenizer.encode(self.data, truncation=True, max_length=first_n_tokens)
+        # Tokenize the entire data, but we might only use a subset based on first_n_tokens
+        full_data_tokens = self.tokenizer.encode(self.data, truncation=False) # Do not truncate here
+        if first_n_tokens is not None:
+             self.data_tokens = full_data_tokens[:first_n_tokens]
+        else:
+             self.data_tokens = full_data_tokens
 
         self.reduce_tokens = reduce_tokens
+        self.chunk_size = chunk_size
         
-        if reduce_tokens:
-            
-            # Restrict to distinct tokens from first N tokens
-            self.tokens_list = self._get_distinct_tokens()
-            self.tokens_list.sort()
-            self.index_tensor = torch.tensor(
-                self.tokens_list, dtype=torch.long, device='cuda' if torch.cuda.is_available() else 'cpu'
-            )
-            # Create bitmap for token presence
-            vocab_size = self.tokenizer.vocab_size
-            self.token_bitmap = torch.zeros(vocab_size, dtype=torch.bool)
-            self.token_bitmap[self.tokens_list] = True
+        if self.reduce_tokens and self.chunk_size is None:
+            # Original behavior: mask based on the first_n_tokens
+            self.tokens_list = sorted(list(set(self.data_tokens)))
+            self._update_token_mask()
+        elif self.chunk_size is not None:
+            # Chunking behavior: token_list will be updated dynamically
+            self.tokens_list = []
         else:
-            # Use full vocabulary if not reducing tokens
+            # No reduction
             self.tokens_list = list(range(self.tokenizer.vocab_size))
+
         print(f"Tokenization complete. Total number of tokens: {len(self.data_tokens)}")
-        print(f"Number of tokens used for prediction: {len(self.tokens_list)}")
+        if not self.chunk_size:
+            print(f"Number of tokens used for prediction: {len(self.tokens_list)}")
+
+    def set_active_chunk(self, chunk_index):
+        """
+        Sets the active token mask based on the tokens in the specified chunk.
+        Also returns the bitmap and its size for the current chunk.
+        """
+        if not self.reduce_tokens or self.chunk_size is None:
+            print("Warning: set_active_chunk is only effective when reduce_tokens is True and chunk_size is set.")
+            return None, 0
+
+        start_index = chunk_index * self.chunk_size
+        end_index = min(start_index + self.chunk_size, len(self.data_tokens))
+        chunk_tokens = self.data_tokens[start_index:end_index]
+
+        if not chunk_tokens:
+            return None, 0
+
+        self.tokens_list = sorted(list(set(chunk_tokens)))
+        self._update_token_mask()
+        
+        print(f"\nActivated chunk {chunk_index}: tokens {start_index}-{end_index}. Distinct tokens: {len(self.tokens_list)}")
+        
+        # Get the roaring bitmap for the current chunk's token list
+        bitmap = BitMap(self.tokens_list)
+        binary_data = bitmap.serialize()
+        size_bytes = len(binary_data) # pyroaring serialize returns bytes
+        
+        return binary_data, size_bytes
+
+    def _update_token_mask(self):
+        """
+        Updates the index tensor and bitmap for the current self.tokens_list.
+        """
+        self.index_tensor = torch.tensor(
+            self.tokens_list, dtype=torch.long, device='cuda' if torch.cuda.is_available() else 'cpu'
+        )
+        vocab_size = self.tokenizer.vocab_size
+        self.token_bitmap = torch.zeros(vocab_size, dtype=torch.bool)
+        self.token_bitmap[self.tokens_list] = True
+
 
     def _get_data_from_file(self, data_path):
         """
@@ -240,17 +284,22 @@ class TokenPredictor:
         elif compression == 'roaring':
             bitmap = BitMap(self.tokens_list)
             binary_data = bitmap.serialize()
-            assert self.tokens_list == list(BitMap.deserialize(binary_data))
-            size_bytes = (len(binary_data) + 7) // 8
+            # The result of serialize() is a bytes object, so its length is the size in bytes.
+            size_bytes = len(binary_data)
+            # Verification step
+            deserialized_bitmap = BitMap.deserialize(binary_data)
+            assert self.tokens_list == list(deserialized_bitmap)
             return binary_data, size_bytes
         
         elif compression == 'roaring_ranking':
             assert ranking is not None
             bitmap = BitMap(ranking)
             binary_data = bitmap.serialize()
-            assert ranking == list(BitMap.deserialize(binary_data))
-
-            size_bytes = (len(binary_data) + 7) // 8
+            # The result of serialize() is a bytes object, so its length is the size in bytes.
+            size_bytes = len(binary_data)
+            # Verification step
+            deserialized_bitmap = BitMap.deserialize(binary_data)
+            assert ranking == list(deserialized_bitmap)
             return binary_data, size_bytes
 
         else:

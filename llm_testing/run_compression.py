@@ -106,7 +106,7 @@ def run_compression_analysis(data_path=None, text_input=None, roaring_ranking_n=
             bitmap_compression = 'roaring'
             _, birmap_size = token_predictor.get_bitmap(compression=bitmap_compression)
         
-        final_size = len(bit_string) + (birmap_size * 8)
+        final_size = len(bit_string) + birmap_size * 8
     else:
         final_size = len(bit_string)
 
@@ -127,6 +127,7 @@ def run_compression_analysis(data_path=None, text_input=None, roaring_ranking_n=
         'first_n_tokens': first_n_tokens,
         'context_length': context_length,
         'decoded_length_bits': decoded_string_length,
+        'arithmetic_code_size_bits': len(bit_string),
         'bitmap_size_bits': birmap_size * 8,
         'final_size_bits': final_size,
         'compression_ratio_percent': final_size / decoded_string_length * 100,

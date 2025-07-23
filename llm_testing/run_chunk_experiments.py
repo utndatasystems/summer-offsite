@@ -7,8 +7,105 @@ import math
 from prediction import TokenPredictor
 from llm_compressor import LLMCompressor
 
+def run_global_mask_experiment(data_path, model_name="Qwen/Qwen2.5-0.5B", context_length=1024, first_n_tokens=10000):
+    print(f"\n----- Running Experiment: Global Token Mask (first_n_tokens={first_n_tokens}) -----")
+    
+    token_predictor = TokenPredictor(
+        data_path=data_path,
+        model_name=model_name,
+        reduce_tokens=True,
+        chunk_size=None,
+        first_n_tokens=None
+    )
+    
+    llm_compressor = LLMCompressor()
+    data_tokens = token_predictor.get_data_tokens()[:first_n_tokens]
+
+    # Calculate the single, global bitmap size
+    _, bitmap_size_bytes = token_predictor.get_bitmap(compression='roaring')
+    total_bitmap_size = bitmap_size_bytes * 8
+
+    prompt_tokens = []
+    for i in range(len(data_tokens) - 1):
+        prompt_tokens.append(data_tokens[i])
+        if len(prompt_tokens) > context_length:
+            prompt_tokens.pop(0)
+
+        print(f"\rProcessing token {i+1}/{len(data_tokens)}", end='')
+        next_token_actual_index = data_tokens[i+1]
+        
+        candidate_token_ids, probs_values = token_predictor.get_token_info(prompt_tokens)
+        probs_values_np = np.array(probs_values)
+
+        try:
+            token_idx_for_compressor = candidate_token_ids.index(next_token_actual_index)
+        except ValueError:
+            print(f"\nFATAL: Token {next_token_actual_index} not in global vocabulary. This should not happen.")
+            break
+        
+        llm_compressor.next_token(token_idx_for_compressor, probs_values_np)
+
+    bit_string = llm_compressor.compress()
+    total_arithmetic_code_size = len(bit_string)
+
+    final_size = total_arithmetic_code_size + total_bitmap_size
+    original_size = len(token_predictor.detokenize(data_tokens)) * 8
+
+    return {
+        "first_n_tokens": first_n_tokens,
+        "chunk_size": -1,  # Special value for global masking
+        "arithmetic_code_size_bits": total_arithmetic_code_size,
+        "bitmap_size_bits": total_bitmap_size,
+        "final_size_bits": final_size,
+        "compression_ratio_percent": final_size / original_size * 100,
+    }
+
+def run_no_masking_experiment(data_path, model_name="Qwen/Qwen2.5-0.5B", context_length=1024, first_n_tokens=10000):
+    print(f"\n----- Running Experiment: No Token Masking (first_n_tokens={first_n_tokens}) -----")
+    
+    token_predictor = TokenPredictor(
+        data_path=data_path,
+        model_name=model_name,
+        reduce_tokens=False,  # No masking
+        first_n_tokens=first_n_tokens
+    )
+    
+    llm_compressor = LLMCompressor()
+    data_tokens = token_predictor.get_data_tokens()
+
+    prompt_tokens = []
+    for i in range(len(data_tokens) - 1):
+        prompt_tokens.append(data_tokens[i])
+        if len(prompt_tokens) > context_length:
+            prompt_tokens.pop(0)
+
+        print(f"\rProcessing token {i+1}/{len(data_tokens)}", end='')
+        next_token_actual_index = data_tokens[i+1]
+        
+        _, probs_values = token_predictor.get_token_info(prompt_tokens)
+        probs_values_np = np.array(probs_values)
+        
+        llm_compressor.next_token(next_token_actual_index, probs_values_np)
+
+    bit_string = llm_compressor.compress()
+    final_size = len(bit_string)
+    original_size = len(token_predictor.detokenize(data_tokens)) * 8
+
+    print(f"\n--- Results for No Token Masking ---")
+    print(f"Final Compressed Size: {final_size} bits")
+    print(f"Overall Compression Ratio: {final_size / original_size * 100:.4f} %")
+
+    return {
+        "first_n_tokens": first_n_tokens,
+        "chunk_size": 0,  # Special value for no masking
+        "arithmetic_code_size_bits": final_size,
+        "bitmap_size_bits": 0,
+        "final_size_bits": final_size,
+        "compression_ratio_percent": final_size / original_size * 100,
+    }
+
 def run_chunked_experiment(data_path, chunk_size, model_name="Qwen/Qwen2.5-0.5B", context_length=1024, first_n_tokens=10000):
-    print(f"\n----- Running Experiment: chunk_size={chunk_size} -----")
+    print(f"\n----- Running Experiment: first_n_tokens={first_n_tokens}, chunk_size={chunk_size} -----")
     
     # Initialize predictor with chunk_size
     token_predictor = TokenPredictor(
@@ -43,7 +140,6 @@ def run_chunked_experiment(data_path, chunk_size, model_name="Qwen/Qwen2.5-0.5B"
             prompt_tokens.pop(0)
 
         print(f"\rProcessing token {i+1}/{len(data_tokens)}", end='')
-
         next_token_actual_index = data_tokens[i+1]
 
         # Get probabilities using the correct, active token mask
@@ -68,7 +164,7 @@ def run_chunked_experiment(data_path, chunk_size, model_name="Qwen/Qwen2.5-0.5B"
     final_size = total_arithmetic_code_size + total_bitmap_size
     original_size = len(token_predictor.detokenize(data_tokens)) * 8
 
-    print("\n\n--- Results for Chunk Size {chunk_size} ---")
+    print(f"\n--- Results for first_n_tokens={first_n_tokens}, chunk_size={chunk_size} ---")
     print(f"Total Arithmetic Code Size: {total_arithmetic_code_size} bits")
     print(f"Total Bitmap Size: {total_bitmap_size} bits")
     print(f"Final Compressed Size: {final_size} bits")
@@ -76,6 +172,7 @@ def run_chunked_experiment(data_path, chunk_size, model_name="Qwen/Qwen2.5-0.5B"
     print(f"Overall Compression Ratio: {final_size / original_size * 100:.4f} %")
 
     return {
+        "first_n_tokens": first_n_tokens,
         "chunk_size": chunk_size,
         "arithmetic_code_size_bits": total_arithmetic_code_size,
         "bitmap_size_bits": total_bitmap_size,
@@ -86,14 +183,13 @@ def run_chunked_experiment(data_path, chunk_size, model_name="Qwen/Qwen2.5-0.5B"
 def main():
     parser = argparse.ArgumentParser(description="Run chunked LLM compression experiments and plot results.")
     parser.add_argument("--data_path", type=str, required=True, help="Input text file path.")
-    parser.add_argument("--output_plot", type=str, default="chunked_compression_plot.png", help="Output file for the plot.")
+    parser.add_argument("--output_plot", type=str, default="chunked_compression_plot.png", help="Base name for the output plot file.")
     parser.add_argument("--output_json", type=str, default="chunked_compression_results.json", help="Output JSON file to store results.")
-    parser.add_argument("--chunk_sizes", type=int, nargs='+', default=[1000, 2000, 5000, 10000], help="List of chunk sizes to test.")
+    parser.add_argument("--chunk_sizes", type=int, nargs='+', default=None, help="List of chunk sizes to test. If not provided, only baseline experiments are run.")
     parser.add_argument("--first_n_tokens", type=int, default=100000, help="Total number of tokens to process from the beginning of the file.")
 
     args = parser.parse_args()
 
-    # Load existing results if the JSON file exists
     results = []
     if os.path.exists(args.output_json):
         with open(args.output_json, 'r') as f:
@@ -103,52 +199,158 @@ def main():
             except json.JSONDecodeError:
                 print(f"Warning: Could not decode JSON from {args.output_json}. Starting with empty results.")
 
-    # Determine which chunk sizes still need to be run
-    existing_chunk_sizes = {d['chunk_size'] for d in results}
-    chunk_sizes_to_run = [cs for cs in args.chunk_sizes if cs not in existing_chunk_sizes]
+    completed_experiments = {(d.get('first_n_tokens'), d.get('chunk_size')) for d in results}
 
-    if not chunk_sizes_to_run:
-        print("All specified chunk sizes have already been run. Nothing to do.")
+    # Always run baselines if they haven't been run for this N
+    if (args.first_n_tokens, 0) not in completed_experiments:
+        no_masking_result = run_no_masking_experiment(data_path=args.data_path, first_n_tokens=args.first_n_tokens)
+        results.append(no_masking_result)
+        with open(args.output_json, 'w') as f: json.dump(results, f, indent=4)
+
+    if (args.first_n_tokens, -1) not in completed_experiments:
+        global_mask_result = run_global_mask_experiment(data_path=args.data_path, first_n_tokens=args.first_n_tokens)
+        results.append(global_mask_result)
+        with open(args.output_json, 'w') as f: json.dump(results, f, indent=4)
+
+    # Run chunked experiments only if chunk_sizes are provided
+    if args.chunk_sizes:
+        for chunk_size in args.chunk_sizes:
+            if (args.first_n_tokens, chunk_size) in completed_experiments:
+                print(f"Skipping experiment for first_n_tokens={args.first_n_tokens}, chunk_size={chunk_size} as it already exists.")
+                continue
+            if chunk_size > args.first_n_tokens:
+                print(f"Skipping chunk size {chunk_size} as it is larger than first_n_tokens ({args.first_n_tokens})")
+                continue
+            
+            result = run_chunked_experiment(
+                data_path=args.data_path,
+                chunk_size=chunk_size,
+                first_n_tokens=args.first_n_tokens
+            )
+            results.append(result)
+
+            with open(args.output_json, 'w') as f: json.dump(results, f, indent=4)
+
+    # --- Plotting Logic ---
+    current_results = [r for r in results if r.get('first_n_tokens') == args.first_n_tokens]
+    
+    if args.chunk_sizes:
+        # Plot the full chart with chunk sizes and baselines
+        plot_full_chart(current_results, args.first_n_tokens, args.output_plot)
     else:
-        print(f"Remaining chunk sizes to run: {chunk_sizes_to_run}")
+        # Plot only the baseline comparisons
+        plot_baseline_chart(current_results, args.first_n_tokens, args.output_plot)
 
-    for chunk_size in chunk_sizes_to_run:
-        # Ensure chunk size is not larger than the total tokens to be processed
-        if chunk_size > args.first_n_tokens:
-            print(f"Skipping chunk size {chunk_size} as it is larger than first_n_tokens ({args.first_n_tokens})")
-            continue
-        
-        result = run_chunked_experiment(
-            data_path=args.data_path,
-            chunk_size=chunk_size,
-            first_n_tokens=args.first_n_tokens
-        )
-        results.append(result)
+def plot_full_chart(current_results, first_n_tokens, output_plot_base):
+    no_masking_data = next((r for r in current_results if r.get('chunk_size') == 0), None)
+    global_mask_data = next((r for r in current_results if r.get('chunk_size') == -1), None)
+    plot_results = [r for r in current_results if r.get('chunk_size') > 0]
 
-        # Save results to JSON after each experiment
-        with open(args.output_json, 'w') as f:
-            json.dump(results, f, indent=4)
-        print(f"\nSaved {len(results)} results to {args.output_json}")
+    if not plot_results: return
 
-    # Plotting
-    if results:
-        results.sort(key=lambda d: d['chunk_size'])
-        chunk_sizes_str = [str(d['chunk_size']) for d in results]
-        arithmetic_sizes = [d['arithmetic_code_size_bits'] for d in results]
-        bitmap_sizes = [d['bitmap_size_bits'] for d in results]
+    plot_results.sort(key=lambda d: d['chunk_size'])
+    
+    all_plot_data = plot_results + ([global_mask_data] if global_mask_data else [])
+    chunk_labels = [str(d['chunk_size']) if d['chunk_size'] != -1 else 'Global Mask' for d in all_plot_data]
+    
+    arithmetic_sizes_bytes = [d['arithmetic_code_size_bits'] / 8 for d in all_plot_data]
+    bitmap_sizes_bytes = [d['bitmap_size_bits'] / 8 for d in all_plot_data]
+    compression_ratios = [d['compression_ratio_percent'] for d in all_plot_data]
 
-        plt.figure(figsize=(12, 8))
-        p1 = plt.bar(chunk_sizes_str, arithmetic_sizes, color='#4c72b0', label='Total Arithmetic Code Size')
-        p2 = plt.bar(chunk_sizes_str, bitmap_sizes, bottom=arithmetic_sizes, color='#dd8452', label='Total Bitmap Size')
+    plt.figure(figsize=(14, 8))
+    # Plot the bars
+    plt.bar(chunk_labels, arithmetic_sizes_bytes, color='#4c72b0', label='Arithmetic Code Size')
+    plt.bar(chunk_labels, bitmap_sizes_bytes, bottom=arithmetic_sizes_bytes, color='#dd8452', label='Bitmap Size')
 
-        plt.xlabel('Chunk Size (Number of Tokens)')
-        plt.ylabel('Total Size (bits)')
-        plt.title(f'Compression Size Breakdown by Chunk Size (First {args.first_n_tokens} Tokens)')
-        plt.legend()
-        plt.grid(axis='y', linestyle='--', alpha=0.7)
-        plt.tight_layout()
-        plt.savefig(args.output_plot)
-        print(f"\nPlot saved to {args.output_plot}")
+    # Add text labels
+    for i in range(len(chunk_labels)):
+        arith_size_bytes = arithmetic_sizes_bytes[i]
+        bitmap_size_bytes = bitmap_sizes_bytes[i]
+        total_size_bytes = arith_size_bytes + bitmap_size_bytes
+        ratio = compression_ratios[i]
+
+        # Add overall compression ratio on top
+        plt.text(i, total_size_bytes, f'{ratio:.2f}%', ha='center', va='bottom', fontsize=9)
+
+        if total_size_bytes > 0:
+            # Label for Arithmetic Code part
+            if arith_size_bytes > 0:
+                arith_percent = (arith_size_bytes / total_size_bytes) * 100
+                plt.text(i, arith_size_bytes / 2, f"{arith_size_bytes/1024:.1f} KB\n({arith_percent:.1f}%)",
+                         ha='center', va='center', color='white', fontsize=8, fontweight='bold')
+
+            # Label for Bitmap part
+            if bitmap_size_bytes > 0:
+                bitmap_percent = (bitmap_size_bytes / total_size_bytes) * 100
+                plt.text(i, arith_size_bytes + (bitmap_size_bytes / 2), f"{bitmap_size_bytes/1024:.1f} KB\n({bitmap_percent:.1f}%)",
+                         ha='center', va='center', color='white', fontsize=8, fontweight='bold')
+
+    if no_masking_data:
+        plt.axhline(y=no_masking_data['final_size_bits'] / 8, color='red', linestyle='--', 
+                    label=f'No Masking Baseline ({no_masking_data["compression_ratio_percent"]:.2f}%)')
+
+    plt.xlabel('Chunk Size (Number of Tokens)')
+    plt.ylabel('Total Size (Bytes)')
+    plt.title(f'Compression Size Breakdown by Chunk Size (First {first_n_tokens} Tokens)')
+    plt.legend()
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+
+    plot_filename = output_plot_base.replace('.png', f'_{first_n_tokens}.png')
+    plt.savefig(plot_filename)
+    print(f"\nPlot saved to {plot_filename}")
+
+def plot_baseline_chart(current_results, first_n_tokens, output_plot_base):
+    no_masking_data = next((r for r in current_results if r.get('chunk_size') == 0), None)
+    global_mask_data = next((r for r in current_results if r.get('chunk_size') == -1), None)
+
+    if not no_masking_data and not global_mask_data:
+        print("No baseline data available to plot.")
+        return
+
+    plt.figure(figsize=(8, 6))
+
+    # Plot Global Mask as a stacked bar if it exists
+    if global_mask_data:
+        labels = ['Global Mask']
+        arithmetic_size_bytes = global_mask_data['arithmetic_code_size_bits'] / 8
+        bitmap_size_bytes = global_mask_data['bitmap_size_bits'] / 8
+        total_size_bytes = arithmetic_size_bytes + bitmap_size_bytes
+        ratio = global_mask_data['compression_ratio_percent']
+
+        plt.bar(labels, [arithmetic_size_bytes], color='#4c72b0', label='Arithmetic Code Size')
+        plt.bar(labels, [bitmap_size_bytes], bottom=[arithmetic_size_bytes], color='#dd8452', label='Bitmap Size')
+
+        # Add overall compression ratio on top
+        plt.text(0, total_size_bytes, f'{ratio:.2f}%', ha='center', va='bottom', fontsize=10)
+
+        if total_size_bytes > 0:
+            if arithmetic_size_bytes > 0:
+                arith_percent = (arithmetic_size_bytes / total_size_bytes) * 100
+                plt.text(0, arithmetic_size_bytes / 2, f"{arithmetic_size_bytes/1024:.1f} KB\n({arith_percent:.1f}%)",
+                         ha='center', va='center', color='white', fontsize=9, fontweight='bold')
+            if bitmap_size_bytes > 0:
+                bitmap_percent = (bitmap_size_bytes / total_size_bytes) * 100
+                plt.text(0, arithmetic_size_bytes + (bitmap_size_bytes / 2), f"{bitmap_size_bytes/1024:.1f} KB\n({bitmap_percent:.1f}%)",
+                         ha='center', va='center', color='white', fontsize=9, fontweight='bold')
+
+    if no_masking_data:
+        plt.axhline(y=no_masking_data['final_size_bits'] / 8, color='red', linestyle='--', 
+                    label=f'No Masking Baseline ({no_masking_data["compression_ratio_percent"]:.2f}%)')
+
+    plt.ylabel('Total Size (Bytes)')
+    plt.title(f'Baseline Comparison (First {first_n_tokens} Tokens)')
+    if not global_mask_data:
+        plt.xticks([])
+    
+    plt.legend()
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+
+    plot_filename = output_plot_base.replace('.png', f'_{first_n_tokens}.png')
+    plt.savefig(plot_filename)
+    print(f"\nPlot saved to {plot_filename}")
+
 
 if __name__ == "__main__":
     main()

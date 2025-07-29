@@ -6,59 +6,9 @@ import numpy as np
 import math
 from prediction import TokenPredictor
 from llm_compressor import LLMCompressor
+from global_mask_compressor import run_global_mask_experiment
 
-def run_global_mask_experiment(data_path, model_name="Qwen/Qwen2.5-0.5B", context_length=1024, first_n_tokens=10000):
-    print(f"\n----- Running Experiment: Global Token Mask (first_n_tokens={first_n_tokens}) -----")
-    
-    token_predictor = TokenPredictor(
-        data_path=data_path,
-        model_name=model_name,
-        reduce_tokens=True,
-        chunk_size=None,
-        first_n_tokens=None
-    )
-    
-    llm_compressor = LLMCompressor()
-    data_tokens = token_predictor.get_data_tokens()[:first_n_tokens]
 
-    # Calculate the single, global bitmap size
-    _, bitmap_size_bytes = token_predictor.get_bitmap(compression='roaring')
-    total_bitmap_size = bitmap_size_bytes * 8
-
-    prompt_tokens = []
-    for i in range(len(data_tokens) - 1):
-        prompt_tokens.append(data_tokens[i])
-        if len(prompt_tokens) > context_length:
-            prompt_tokens.pop(0)
-
-        print(f"\rProcessing token {i+1}/{len(data_tokens)}", end='')
-        next_token_actual_index = data_tokens[i+1]
-        
-        candidate_token_ids, probs_values = token_predictor.get_token_info(prompt_tokens)
-        probs_values_np = np.array(probs_values)
-
-        try:
-            token_idx_for_compressor = candidate_token_ids.index(next_token_actual_index)
-        except ValueError:
-            print(f"\nFATAL: Token {next_token_actual_index} not in global vocabulary. This should not happen.")
-            break
-        
-        llm_compressor.next_token(token_idx_for_compressor, probs_values_np)
-
-    bit_string = llm_compressor.compress()
-    total_arithmetic_code_size = len(bit_string)
-
-    final_size = total_arithmetic_code_size + total_bitmap_size
-    original_size = len(token_predictor.detokenize(data_tokens)) * 8
-
-    return {
-        "first_n_tokens": first_n_tokens,
-        "chunk_size": -1,  # Special value for global masking
-        "arithmetic_code_size_bits": total_arithmetic_code_size,
-        "bitmap_size_bits": total_bitmap_size,
-        "final_size_bits": final_size,
-        "compression_ratio_percent": final_size / original_size * 100,
-    }
 
 def run_no_masking_experiment(data_path, model_name="Qwen/Qwen2.5-0.5B", context_length=1024, first_n_tokens=10000):
     print(f"\n----- Running Experiment: No Token Masking (first_n_tokens={first_n_tokens}) -----")
@@ -83,7 +33,8 @@ def run_no_masking_experiment(data_path, model_name="Qwen/Qwen2.5-0.5B", context
         next_token_actual_index = data_tokens[i+1]
         
         _, probs_values = token_predictor.get_token_info(prompt_tokens)
-        probs_values_np = np.array(probs_values)
+        # probs_values_np = np.array(probs_values)
+        probs_values_np = probs_values.cpu().numpy()
         
         llm_compressor.next_token(next_token_actual_index, probs_values_np)
 
@@ -144,7 +95,8 @@ def run_chunked_experiment(data_path, chunk_size, model_name="Qwen/Qwen2.5-0.5B"
 
         # Get probabilities using the correct, active token mask
         candidate_token_ids, probs_values = token_predictor.get_token_info(prompt_tokens)
-        probs_values_np = np.array(probs_values)
+        # probs_values_np = np.array(probs_values)
+        probs_values_np = probs_values.cpu().numpy()
 
         # With the corrected logic, this ValueError should no longer occur,
         # as the token is guaranteed to be in the vocabulary of its own chunk.
@@ -187,6 +139,11 @@ def main():
     parser.add_argument("--output_json", type=str, default="chunked_compression_results.json", help="Output JSON file to store results.")
     parser.add_argument("--chunk_sizes", type=int, nargs='+', default=None, help="List of chunk sizes to test. If not provided, only baseline experiments are run.")
     parser.add_argument("--first_n_tokens", type=int, default=100000, help="Total number of tokens to process from the beginning of the file.")
+    parser.add_argument("--use_kv_cache", action="store_true", help="Enable KV cache for global mask experiment.")
+    parser.add_argument("--context_length", type=int, default=1024, help="Context length for experiments.")
+    parser.add_argument("--retain_tokens", type=int, default=1000, help="Number of tokens to retain when using KV cache.")
+    parser.add_argument("--skip_no_masking", action="store_true", help="Skip the 'no masking' baseline experiment.")
+
 
     args = parser.parse_args()
 
@@ -201,18 +158,30 @@ def main():
 
     completed_experiments = {(d.get('first_n_tokens'), d.get('chunk_size')) for d in results}
 
-    # Always run baselines if they haven't been run for this N
-    if (args.first_n_tokens, 0) not in completed_experiments:
-        no_masking_result = run_no_masking_experiment(data_path=args.data_path, first_n_tokens=args.first_n_tokens)
+
+
+
+
+
+    if not args.skip_no_masking and (args.first_n_tokens, 0) not in completed_experiments:
+        no_masking_result = run_no_masking_experiment(
+            data_path=args.data_path, 
+            first_n_tokens=args.first_n_tokens,
+            context_length=args.context_length
+        )
         results.append(no_masking_result)
         with open(args.output_json, 'w') as f: json.dump(results, f, indent=4)
 
-    if (args.first_n_tokens, -1) not in completed_experiments:
-        global_mask_result = run_global_mask_experiment(data_path=args.data_path, first_n_tokens=args.first_n_tokens)
-        results.append(global_mask_result)
-        with open(args.output_json, 'w') as f: json.dump(results, f, indent=4)
+    if not args.chunk_sizes:
+        if (args.first_n_tokens, -1) not in completed_experiments:
+            _, _, global_mask_result = run_global_mask_experiment(
+                data_path=args.data_path, 
+                first_n_tokens=args.first_n_tokens,
+                use_kv_cache=args.use_kv_cache
+            )
+            results.append(global_mask_result)
+            with open(args.output_json, 'w') as f: json.dump(results, f, indent=4)
 
-    # Run chunked experiments only if chunk_sizes are provided
     if args.chunk_sizes:
         for chunk_size in args.chunk_sizes:
             if (args.first_n_tokens, chunk_size) in completed_experiments:
@@ -225,20 +194,18 @@ def main():
             result = run_chunked_experiment(
                 data_path=args.data_path,
                 chunk_size=chunk_size,
-                first_n_tokens=args.first_n_tokens
+                first_n_tokens=args.first_n_tokens,
+                context_length=args.context_length
             )
             results.append(result)
 
             with open(args.output_json, 'w') as f: json.dump(results, f, indent=4)
 
-    # --- Plotting Logic ---
     current_results = [r for r in results if r.get('first_n_tokens') == args.first_n_tokens]
     
     if args.chunk_sizes:
-        # Plot the full chart with chunk sizes and baselines
         plot_full_chart(current_results, args.first_n_tokens, args.output_plot)
     else:
-        # Plot only the baseline comparisons
         plot_baseline_chart(current_results, args.first_n_tokens, args.output_plot)
 
 def plot_full_chart(current_results, first_n_tokens, output_plot_base):
@@ -347,7 +314,7 @@ def plot_baseline_chart(current_results, first_n_tokens, output_plot_base):
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
 
-    plot_filename = output_plot_base.replace('.png', f'_{first_n_tokens}.png')
+    plot_filename = output_plot_base.replace('.png', f'_baselines_{first_n_tokens}.png')
     plt.savefig(plot_filename)
     print(f"\nPlot saved to {plot_filename}")
 

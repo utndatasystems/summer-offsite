@@ -77,7 +77,8 @@ def run_global_mask_experiment(
         else:
             candidate_token_ids, probs_values = token_predictor.get_token_info(prompt_tokens)
         
-        probs_values_np = np.array(probs_values)
+        # probs_values_np = np.array(probs_values)
+        probs_values_np = probs_values.cpu().numpy()
 
         # Find the index of the actual next token within the candidate tokens.
         try:
@@ -103,6 +104,7 @@ def run_global_mask_experiment(
         "arithmetic_code_size_bits": total_arithmetic_code_size,
         "bitmap_size_bits": total_bitmap_size,
         "final_size_bits": final_size,
+        "pure_compression_ratio_percent": total_arithmetic_code_size / original_size * 100,
         "compression_ratio_percent": final_size / original_size * 100,
     }
 
@@ -172,7 +174,8 @@ def run_global_mask_decompression(
         else:
             candidate_token_ids, probs_values = token_predictor.get_token_info(decompress_prompt_tokens)
 
-        probs_values_np = np.array(probs_values)
+        # probs_values_np = np.array(probs_values)
+        probs_values_np = probs_values.cpu().numpy()
         
         # Decompress the next token's index from the bit string.
         token_idx = decompressor.decompress(probs_values_np)

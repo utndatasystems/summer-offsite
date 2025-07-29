@@ -145,20 +145,20 @@ class TokenPredictor:
         if torch.cuda.is_available():
             input_ids = input_ids.to('cuda')
 
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = self.model(input_ids)
             logits = outputs.logits[:, -1, :]  # Get logits for the last token
 
-        logits = logits[0]  # Shape: (vocab_size,)
+            logits = logits[0]  # Shape: (vocab_size,)
 
-        if self.reduce_tokens:
-            # Select only logits for reduced token set
-            selected_logits = torch.index_select(logits, dim=0, index=self.index_tensor)
-        else:
-            selected_logits = logits
+            if self.reduce_tokens:
+                # Select only logits for reduced token set
+                selected_logits = torch.index_select(logits, dim=0, index=self.index_tensor)
+            else:
+                selected_logits = logits
 
-        # Convert logits to probabilities using softmax
-        probs = torch.nn.functional.softmax(selected_logits, dim=0).tolist()
+            # Convert logits to probabilities using softmax
+            probs = torch.nn.functional.softmax(selected_logits, dim=0)
 
         return self.tokens_list, probs
 
@@ -202,35 +202,36 @@ class TokenPredictor:
             if self._past_kv is None or reset_cache:
                 # Rebuild the cache from the full prompt.
                 input_ids = torch.tensor([prompt_tokens], device=device)
-                with torch.no_grad():
+                with torch.inference_mode():
                     outputs = self.model(input_ids, use_cache=True)
-                self._past_kv = outputs.past_key_values
-                self._cached_context_len = len(prompt_tokens)
+                    self._past_kv = outputs.past_key_values
+                    self._cached_context_len = len(prompt_tokens)
             else:
                 # Incremental step: process only the last token using the existing cache.
                 new_token_id = prompt_tokens[-1]
                 input_ids = torch.tensor([[new_token_id]], device=device)
-                with torch.no_grad():
+                with torch.inference_mode():
                     outputs = self.model(
                         input_ids,
                         past_key_values=self._past_kv,
                         use_cache=True
                     )
-                self._past_kv = outputs.past_key_values
-                self._cached_context_len += 1
+                    self._past_kv = outputs.past_key_values
+                    self._cached_context_len += 1
 
-        # Extract logits for the next token prediction.
-        logits = outputs.logits[:, -1, :]
-        logits = logits[0]
+        with torch.inference_mode():
+            # Extract logits for the next token prediction.
+            logits = outputs.logits[:, -1, :]
+            logits = logits[0]
 
-        # Filter logits based on the allowed token mask if token reduction is enabled.
-        if self.reduce_tokens:
-            selected_logits = torch.index_select(logits, dim=0, index=self.index_tensor)
-        else:
-            selected_logits = logits
+            # Filter logits based on the allowed token mask if token reduction is enabled.
+            if self.reduce_tokens:
+                selected_logits = torch.index_select(logits, dim=0, index=self.index_tensor)
+            else:
+                selected_logits = logits
 
-        # Convert logits to probabilities.
-        probs = torch.nn.functional.softmax(selected_logits, dim=0).tolist()
+            # Convert logits to probabilities.
+            probs = torch.nn.functional.softmax(selected_logits, dim=0)
         return self.tokens_list, probs
 
     def get_full_token_info(self, prompt_tokens):

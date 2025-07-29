@@ -162,6 +162,77 @@ class TokenPredictor:
 
         return self.tokens_list, probs
 
+    def get_token_info_cache(self, prompt_tokens, use_kv_cache=True):
+        """
+        Returns candidate token IDs and their probabilities, using KV caching for efficiency.
+
+        This function handles the model's key-value cache to speed up inference.
+        The calling function is responsible for managing the context window (slicing).
+        This function detects if the prompt has been shortened, which implies a cache reset.
+
+        Args:
+            prompt_tokens (list[int]): The list of token IDs for the prompt.
+            use_kv_cache (bool): If True, enables the KV cache mechanism.
+
+        Returns:
+            tuple: A tuple containing:
+                - list[int]: The list of candidate token IDs.
+                - list[float]: The corresponding probabilities for each candidate token.
+        """
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        # Initialize cache state if it doesn't exist.
+        if not hasattr(self, "_past_kv"):
+            self._past_kv = None
+            self._cached_context_len = 0
+
+        if not use_kv_cache:
+            # If not using cache, run the model on the full prompt every time.
+            input_ids = torch.tensor([prompt_tokens], device=device)
+            with torch.no_grad():
+                outputs = self.model(input_ids, use_cache=False)
+            # Ensure cache is cleared when not in use.
+            self._past_kv = None
+            self._cached_context_len = 0
+        else:
+            # Check if the cache needs to be reset. This happens if the external
+            # context management has shortened the prompt.
+            reset_cache = len(prompt_tokens) < self._cached_context_len
+
+            if self._past_kv is None or reset_cache:
+                # Rebuild the cache from the full prompt.
+                input_ids = torch.tensor([prompt_tokens], device=device)
+                with torch.no_grad():
+                    outputs = self.model(input_ids, use_cache=True)
+                self._past_kv = outputs.past_key_values
+                self._cached_context_len = len(prompt_tokens)
+            else:
+                # Incremental step: process only the last token using the existing cache.
+                new_token_id = prompt_tokens[-1]
+                input_ids = torch.tensor([[new_token_id]], device=device)
+                with torch.no_grad():
+                    outputs = self.model(
+                        input_ids,
+                        past_key_values=self._past_kv,
+                        use_cache=True
+                    )
+                self._past_kv = outputs.past_key_values
+                self._cached_context_len += 1
+
+        # Extract logits for the next token prediction.
+        logits = outputs.logits[:, -1, :]
+        logits = logits[0]
+
+        # Filter logits based on the allowed token mask if token reduction is enabled.
+        if self.reduce_tokens:
+            selected_logits = torch.index_select(logits, dim=0, index=self.index_tensor)
+        else:
+            selected_logits = logits
+
+        # Convert logits to probabilities.
+        probs = torch.nn.functional.softmax(selected_logits, dim=0).tolist()
+        return self.tokens_list, probs
+
     def get_full_token_info(self, prompt_tokens):
         """
         Given a list of prompt tokens, return the list of all token IDs and their probabilities

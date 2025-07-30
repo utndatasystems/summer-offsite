@@ -5,20 +5,119 @@ import math
 from pyroaring import BitMap
 import time
 
+class TokenDataPreparer:
+    def __init__(self, args):
+        """
+        Initialize the TokenDataPreparer class.
+        """
+        if args.input_path is None and args.text_input is None:
+            raise ValueError("Either input_path or text_input must be provided.")
+        if args.input_path and args.text_input:
+            raise ValueError("Only one of input_path or text_input can be provided.")
+
+        # Load tokenizer and model from cache or download
+        self.tokenizer = AutoTokenizer.from_pretrained(args.model_name, cache_dir=".cache")
+
+        # Load and tokenize input data
+        if args.input_path:
+            self.data = self._get_data_from_file(args.input_path)
+        else:
+            self.data = args.text_input
+
+        self.args = args
+
+        # Tokenize the text
+        print("Starting tokenization...")
+        start_time = time.time()
+        if args.first_n_tokens is not None:
+            truncated_data = " ".join(self.data.split(" ")[:self.args.first_n_tokens])
+            self.data_tokens = self.tokenizer.encode(truncated_data, truncation=True, max_length=self.args.first_n_tokens)
+            if len(self.data_tokens) < self.args.first_n_tokens:
+                self.args.first_n_tokens = len(self.data_tokens)
+                print(f"Reducing first_n_tokens to {self.args.first_n_tokens}, since the input data has fewer tokens.")
+            assert len(self.data_tokens) == self.args.first_n_tokens, f"Tokenization produced {len(self.data_tokens)} tokens, expected {self.args.first_n_tokens}."
+        else:
+            self.data_tokens = self.tokenizer.encode(self.data, truncation=False)
+        print(f"Tokenization complete in {(time.time() - start_time):.2f}s. Total number of tokens: {len(self.data_tokens)}")
+
+        self.reduce_tokens = self.args.reduce_tokens
+
+        if self.reduce_tokens:
+            # Original behavior: mask based on the first_n_tokens
+            self.tokens_list = sorted(list(set(self.data_tokens)))
+        else:
+            # No reduction
+            self.tokens_list = list(range(self.tokenizer.vocab_size))
+
+    def _get_data_from_file(self, input_path):
+        """
+        Load data from a given text file.
+
+        Args:
+            input_path (str): File path to the input text.
+
+        Returns:
+            str: Contents of the file as a string.
+        """
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Data file not found: {input_path}")
+        with open(input_path, 'r') as f:
+            return f.read()
+        
+    def get_data_tokens(self):
+        """
+        Get the full list of tokens from the loaded data.
+
+        Returns:
+            list[int]: List of token IDs from the data.
+        """
+        return self.data_tokens
+    
+    def get_bitmap(self):
+        """
+        Get the bitmap representation of the reduced token set.
+
+        Returns:
+            BitMap: A BitMap object representing the reduced token set.
+        """
+        if not self.reduce_tokens:
+            raise ValueError("Bitmap only available when reduce_tokens is True.")
+
+        # Create a BitMap from the tokens list
+        bitmap = BitMap(self.tokens_list)
+        binary_data = bitmap.serialize()
+        return binary_data
+    
+    def get_args(self):
+        """
+        Get the arguments used for this data preparation.
+
+        Returns:
+            Namespace: The arguments used for this data preparation.
+        """
+        return self.args
+
 class TokenPredictor:
-    def __init__(self, args, chunk_size=None):
+    def __init__(self, args, bitmap_data):
         """
         Initialize the TokenPredictor class.
         """
-        if args.data_path is None and args.text_input is None:
-            raise ValueError("Either data_path or text_input must be provided.")
-        if args.data_path and args.text_input:
-            raise ValueError("Only one of data_path or text_input can be provided.")
 
         # Load tokenizer and model from cache or download
         self.tokenizer = AutoTokenizer.from_pretrained(args.model_name, cache_dir=".cache")
         self.model = AutoModelForCausalLM.from_pretrained(args.model_name, cache_dir=".cache")
         self.model.eval()  # Set model to evaluation mode
+
+        # --- If bitmap_data is provided, reconstruct tokens_list & index_tensor ---
+        if bitmap_data is not None:
+            bitmap = BitMap.deserialize(bitmap_data)
+            self.tokens_list = list(bitmap)
+        else:
+            self.tokens_list = list(range(self.tokenizer.vocab_size))
+
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.index_tensor = torch.tensor(self.tokens_list, dtype=torch.long, device=device)
+        self.reduce_tokens = args.reduce_tokens
 
         # Move model to GPU if available
         if torch.cuda.is_available():
@@ -27,42 +126,7 @@ class TokenPredictor:
         else:
             print("GPU not available, using CPU.")
 
-        # Load and tokenize input data
-        if args.data_path:
-            self.data = self._get_data_from_file(args.data_path)
-        else:
-            self.data = args.text_input
-
-        # Tokenize the text
-        print("Starting tokenization...")
-        start_time = time.time()
-        if args.first_n_tokens is not None:
-            truncated_data = " ".join(self.data.split(" ")[:args.first_n_tokens])
-            self.data_tokens = self.tokenizer.encode(truncated_data, truncation=True, max_length=args.first_n_tokens)
-            assert len(self.data_tokens) == args.first_n_tokens, f"Tokenization produced {len(self.data_tokens)} tokens, expected {args.first_n_tokens}."
-        else:
-            self.data_tokens = self.tokenizer.encode(self.data, truncation=False)
-        print(f"Tokenization complete in {(time.time() - start_time):.2f}s. Total number of tokens: {len(self.data_tokens)}")
-
-        self.reduce_tokens = args.reduce_tokens
-        self.chunk_size = chunk_size
-        
-        if self.reduce_tokens and self.chunk_size is None:
-            # Original behavior: mask based on the first_n_tokens
-            self.tokens_list = sorted(list(set(self.data_tokens)))
-            self._update_token_mask()
-        elif self.chunk_size is not None:
-            # Chunking behavior: token_list will be updated dynamically
-            self.tokens_list = []
-        else:
-            # No reduction
-            self.tokens_list = list(range(self.tokenizer.vocab_size))
-
-        print(f"Tokenization complete. Total number of tokens: {len(self.data_tokens)}")
-        if not self.chunk_size:
-            print(f"Number of tokens used for prediction: {len(self.tokens_list)}")
-
-    def set_active_chunk(self, chunk_index):
+    def _set_active_chunk(self, chunk_index):
         """
         Sets the active token mask based on the tokens in the specified chunk.
         Also returns the bitmap and its size for the current chunk.
@@ -101,22 +165,6 @@ class TokenPredictor:
         self.token_bitmap = torch.zeros(vocab_size, dtype=torch.bool)
         self.token_bitmap[self.tokens_list] = True
 
-
-    def _get_data_from_file(self, data_path):
-        """
-        Load data from a given text file.
-
-        Args:
-            data_path (str): File path to the input text.
-
-        Returns:
-            str: Contents of the file as a string.
-        """
-        if not os.path.exists(data_path):
-            raise FileNotFoundError(f"Data file not found: {data_path}")
-        with open(data_path, 'r') as f:
-            return f.read()
-
     def _get_distinct_tokens(self):
         """
         Get distinct tokens from the input data.
@@ -124,8 +172,7 @@ class TokenPredictor:
         Returns:
             list[int]: Sorted list of distinct token IDs.
         """
-        tokens = self.data_tokens
-        return list(set(tokens))
+        return self.tokens_list
 
     def run_batched_inference(self, prompts, enable_kv_cache=True):
         # TODO: Add documentation for this method
@@ -308,15 +355,6 @@ class TokenPredictor:
         next_index = token_ids.index(next_token)
         return next_index, probs
 
-    def get_data_tokens(self):
-        """
-        Get the full list of tokens from the loaded data.
-
-        Returns:
-            list[int]: List of token IDs from the data.
-        """
-        return self.data_tokens
-
     def detokenize(self, token_ids):
         """
         Convert a list of token IDs back to a string.
@@ -341,7 +379,7 @@ class TokenPredictor:
         """
         return self.tokens_list[token_id]
 
-    def get_bitmap(self, compression='none', ranking=None):
+    def _get_bitmap(self, compression='none', ranking=None):
         """
         Get the bitmap and size with optional compression.
 

@@ -1,8 +1,7 @@
 from llm_testing.llm_compressor import LLMCompressor, LLMDecompressor
-from llm_testing.prediction import TokenPredictor
+from llm_testing.prediction import TokenDataPreparer, TokenPredictor
 import numpy as np
 import time
-
 
 def run_global_mask_compression(args):
     """
@@ -13,7 +12,7 @@ def run_global_mask_compression(args):
     to reduce the prediction space.
 
     Args:
-        data_path (str): Path to the data file.
+        input_path (str): Path to the data file.
         model_name (str): Name of the language model to use.
         context_length (int): The maximum number of tokens to consider as context.
         first_n_tokens (int): The number of tokens from the dataset to process.
@@ -27,20 +26,23 @@ def run_global_mask_compression(args):
             - dict: A dictionary with compression statistics.
     """
     # TODO: A better summary of the experiment's parameters
-    print(f"\n----- Running Experiment: Global Token Mask (first_n_tokens={args.first_n_tokens}, kv_cache={args.use_kv_cache}) -----")
+    print(f"\n----- Running Compression: Global Token Mask (tokens={args.first_n_tokens}, kv_cache={args.use_kv_cache}) -----")
 
     t0_tokenize = time.perf_counter()
 
     # Initialize the token predictor to get tokens and probabilities from the model.
-    token_predictor = TokenPredictor(args, chunk_size=None)
-
-    llm_compressor = LLMCompressor()
-    data_tokens = token_predictor.get_data_tokens()
+    token_data_preparer = TokenDataPreparer(args)
+    data_tokens = token_data_preparer.get_data_tokens()
+    args = token_data_preparer.get_args()
+    first_token = data_tokens[0] if data_tokens else None
 
     # Get the compressed bitmap of the vocabulary and its size.
-    bitmask_data, bitmap_size_bytes = token_predictor.get_bitmap(compression='roaring')
-    total_bitmap_size = bitmap_size_bytes * 8
+    bitmask_data = token_data_preparer.get_bitmap()
+    total_bitmap_size = len(bitmask_data) * 8
     tokenize_time = time.perf_counter() - t0_tokenize
+
+    llm_compressor = LLMCompressor()
+    token_predictor = TokenPredictor(args, bitmap_data=bitmask_data)
 
     t0_infer = time.perf_counter()
     # Process each token in the dataset to compress it.
@@ -69,7 +71,7 @@ def run_global_mask_compression(args):
     final_size = total_arithmetic_code_size + total_bitmap_size
     original_size = len(token_predictor.detokenize(data_tokens)) * 8
 
-    return bit_string, bitmask_data, {
+    return first_token, bit_string, bitmask_data, {
         "first_n_tokens": args.first_n_tokens,
         "chunk_size": -1, # -1 indicates global mask, not chunking
         "arithmetic_code_size_bits": total_arithmetic_code_size,
@@ -81,15 +83,11 @@ def run_global_mask_compression(args):
         "inference_time_sec": inference_time
     }
 
-
 def run_global_mask_decompression(
+    args,
+    first_token,
     bit_string,
-    data_path,
-    model_name="Qwen/Qwen2.5-0.5B",
-    context_length=131000,
-    first_n_tokens=10000,
-    use_kv_cache=False,
-    retain_tokens=1000
+    bitmap
 ):
     """
     Runs the decompression for a bit string compressed with a global token mask.
@@ -99,7 +97,7 @@ def run_global_mask_decompression(
 
     Args:
         bit_string (str): The compressed bit string.
-        data_path (str): Path to the original data file (for the token predictor).
+        input_path (str): Path to the original data file (for the token predictor).
         model_name (str): Name of the language model to use.
         context_length (int): The maximum number of tokens to consider as context.
         first_n_tokens (int): The number of tokens to decompress.
@@ -109,68 +107,52 @@ def run_global_mask_decompression(
     Returns:
         list: The list of reconstructed token IDs.
     """
-    print(f"\n----- Running Decompression: Global Token Mask (first_n_tokens={first_n_tokens}, kv_cache={use_kv_cache}) -----")
-    
+    print(f"\n----- Running Decompression: Global Token Mask (first_n_tokens={args.first_n_tokens}, kv_cache={args.use_kv_cache}) -----")
+
     # Initialize the token predictor.
     token_predictor = TokenPredictor(
-        data_path=data_path,
-        model_name=model_name,
-        reduce_tokens=True,
-        chunk_size=None,
-        first_n_tokens=None
+        args,
+        bitmap_data=bitmap
     )
 
     # Get the original tokens to know the starting token and the total length.
-    data_tokens = token_predictor.get_data_tokens()[:first_n_tokens]
     
     decompressor = LLMDecompressor(bit_string)
     # Start decompression with the first token from the original data.
-    decompress_prompt_tokens = [data_tokens[0]]
-    reconstructed_tokens = [data_tokens[0]]
+    decompress_prompt_tokens = [first_token]
+    reconstructed_tokens = [first_token]
 
-    # Decompress token by token.
-    for i in range(1, len(data_tokens)):
-        # Maintain the prompt length, following the same policy as compression.
-        if use_kv_cache:
-            if len(decompress_prompt_tokens) > context_length:
-                decompress_prompt_tokens = decompress_prompt_tokens[-retain_tokens:]
-        else:
-            if len(decompress_prompt_tokens) > context_length:
-                decompress_prompt_tokens.pop(0)
-        
-        # Get the model's probability distribution for the current context.
-        if use_kv_cache:
-            candidate_token_ids, probs_values = token_predictor.get_token_info_cache(
-                decompress_prompt_tokens,
-                use_kv_cache=True
-            )
-        else:
-            candidate_token_ids, probs_values = token_predictor.get_token_info(decompress_prompt_tokens)
 
-        # probs_values_np = np.array(probs_values)
-        probs_values_np = probs_values.cpu().numpy()
-        
-        # Decompress the next token's index from the bit string.
-        token_idx = decompressor.decompress(probs_values_np)
-        next_token = token_predictor.get_token_by_id(token_idx)
-        
-        # Append the decompressed token to the context for the next step.
-        decompress_prompt_tokens.append(next_token)
-        reconstructed_tokens.append(next_token)
-        
-        print(f"\rDecompressing token {i+1}/{len(data_tokens)}", end='')
+    for token_idx in range(1, args.first_n_tokens):
+        prompts = [decompress_prompt_tokens]
 
-    print("\nDecompression completed.")
-    
-    return reconstructed_tokens
+        print(f"\rProcessing batch {token_idx // args.batch_size + 1}/{(args.first_n_tokens + args.batch_size - 1) // args.batch_size}", end='')
+
+        # Run LLM inference
+        _, probs_values = token_predictor.run_batched_inference(prompts)
+
+        # Provide the actual token's indexes and the probability distributions to the compressor.
+        for idx, probs in enumerate(np.array(probs_values)):
+            # Decompress the next token's index from the bit string.
+            token_idx = decompressor.decompress(probs)
+            next_token = token_predictor.get_token_by_id(token_idx)
+            
+            # Append the decompressed token to the context for the next step.
+            decompress_prompt_tokens.append(next_token)
+            reconstructed_tokens.append(next_token)
+
+    detoken_string = token_predictor.detokenize(reconstructed_tokens)
+
+    return reconstructed_tokens, detoken_string
 
 def run_global_mask_compression_decompression_test(
-    data_path,
+    input_path,
     model_name="Qwen/Qwen2.5-0.5B",
-    context_length=131000,
-    first_n_tokens=10000,
-    use_kv_cache=False,
-    retain_tokens=1000
+    context_length=1000,
+    first_n_tokens=1000,
+    use_kv_cache=True,
+    retain_tokens=100,
+    batch_size=1
 ):
     """
     Runs a full compression and decompression cycle and verifies the result.
@@ -179,53 +161,52 @@ def run_global_mask_compression_decompression_test(
     comparing the original tokens with the reconstructed tokens.
 
     Args:
-        data_path (str): Path to the data file.
+        input_path (str): Path to the data file.
         model_name (str): Name of the language model.
         context_length (int): Maximum context length.
         first_n_tokens (int): Number of tokens to process.
         use_kv_cache (bool): Whether to use the KV cache.
         retain_tokens (int): Number of tokens to retain in the context.
+        batch_size (int): The batch size for inference.
 
     Returns:
         dict: A dictionary containing the compression results and a verification status.
     """
     print(f"\n===== Running Compression + Decompression Test (kv_cache={use_kv_cache}) =====")
     
+    # Create a mock args object to pass to the functions.
+    class Args:
+        pass
+    args = Args()
+    args.input_path = input_path
+    args.text_input = None
+    args.model_name = model_name
+    args.context_length = context_length
+    args.first_n_tokens = first_n_tokens
+    args.use_kv_cache = use_kv_cache
+    args.retain_tokens = retain_tokens
+    args.batch_size = batch_size
+    args.reduce_tokens = True
+    
     # Step 1: Compress the data.
-    bit_string, _, compression_result = run_global_mask_compression(
-        data_path=data_path,
-        model_name=model_name,
-        context_length=context_length,
-        first_n_tokens=first_n_tokens,
-        use_kv_cache=use_kv_cache,
-        retain_tokens=retain_tokens
-    )
+    first_token, bit_string, bitmask_data, compression_result = run_global_mask_compression(args)
     
     print("\nCompression complete.")
     print(f"Compression Ratio: {compression_result['compression_ratio_percent']:.2f}%")
 
     # Step 2: Decompress the data.
-    reconstructed_tokens = run_global_mask_decompression(
-        bit_string=bit_string,
-        data_path=data_path,
-        model_name=model_name,
-        context_length=context_length,
-        first_n_tokens=first_n_tokens,
-        use_kv_cache=use_kv_cache,
-        retain_tokens=retain_tokens
+    reconstructed_tokens, _ = run_global_mask_decompression(
+        args,
+        first_token,
+        bit_string,
+        bitmask_data
     )
     
     print("\nDecompression complete.")
 
     # Step 3: Verify that the reconstructed tokens match the original ones.
-    token_predictor = TokenPredictor(
-        data_path=data_path,
-        model_name=model_name,
-        reduce_tokens=True,
-        chunk_size=None,
-        first_n_tokens=None
-    )
-    original_tokens = token_predictor.get_data_tokens()[:first_n_tokens]
+    token_data_preparer = TokenDataPreparer(args)
+    original_tokens = token_data_preparer.get_data_tokens()
     
     match = reconstructed_tokens == original_tokens
     print(f"Verification: {'✅ PASS' if match else '❌ FAIL'}")
@@ -234,3 +215,13 @@ def run_global_mask_compression_decompression_test(
         "compression_result": compression_result,
         "verification_passed": match
     }
+
+if __name__ == "__main__":
+    run_global_mask_compression_decompression_test(
+        input_path="../data/billytest.txt",
+        first_n_tokens=300,
+        context_length=1000,
+        use_kv_cache=True,
+        retain_tokens=100,
+        batch_size=1
+    )

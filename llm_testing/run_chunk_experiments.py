@@ -6,7 +6,7 @@ import numpy as np
 import math
 from prediction import TokenPredictor
 from llm_compressor import LLMCompressor
-from global_mask_compressor import run_global_mask_experiment
+from global_mask_compressor import run_global_mask_compression
 
 
 
@@ -174,7 +174,7 @@ def main():
 
     if not args.chunk_sizes:
         if (args.first_n_tokens, -1) not in completed_experiments:
-            _, _, global_mask_result = run_global_mask_experiment(
+            _, _, global_mask_result = run_global_mask_compression(
                 data_path=args.data_path, 
                 first_n_tokens=args.first_n_tokens,
                 use_kv_cache=args.use_kv_cache

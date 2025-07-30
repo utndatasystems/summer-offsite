@@ -1,9 +1,10 @@
-from llm_compressor import LLMCompressor, LLMDecompressor
-from prediction import TokenPredictor
+from llm_testing.llm_compressor import LLMCompressor, LLMDecompressor
+from llm_testing.prediction import TokenPredictor
 import numpy as np
+import time
 
 
-def run_global_mask_experiment(
+def run_global_mask_compression(
     data_path,
     model_name="Qwen/Qwen2.5-0.5B",
     context_length=131000,
@@ -33,6 +34,8 @@ def run_global_mask_experiment(
             - dict: A dictionary with compression statistics.
     """
     print(f"\n----- Running Experiment: Global Token Mask (first_n_tokens={first_n_tokens}, kv_cache={use_kv_cache}) -----")
+
+    t0_tokenize = time.perf_counter()
     
     # Initialize the token predictor to get tokens and probabilities from the model.
     token_predictor = TokenPredictor(
@@ -49,6 +52,9 @@ def run_global_mask_experiment(
     # Get the compressed bitmap of the vocabulary and its size.
     bitmask_data, bitmap_size_bytes = token_predictor.get_bitmap(compression='roaring')
     total_bitmap_size = bitmap_size_bytes * 8
+    tokenize_time = time.perf_counter() - t0_tokenize
+
+    t0_infer = time.perf_counter()
 
     prompt_tokens = []
     # Process each token in the dataset to compress it.
@@ -90,6 +96,8 @@ def run_global_mask_experiment(
         # Provide the actual token's index and the probability distribution to the compressor.
         llm_compressor.next_token(token_idx_for_compressor, probs_values_np)
 
+    inference_time = time.perf_counter() - t0_infer
+
     # Finalize the compression to get the bit string.
     bit_string = llm_compressor.compress()
     total_arithmetic_code_size = len(bit_string)
@@ -106,6 +114,8 @@ def run_global_mask_experiment(
         "final_size_bits": final_size,
         "pure_compression_ratio_percent": total_arithmetic_code_size / original_size * 100,
         "compression_ratio_percent": final_size / original_size * 100,
+        "tokenize_time_sec": tokenize_time,
+        "inference_time_sec": inference_time
     }
 
 
@@ -219,7 +229,7 @@ def run_global_mask_compression_decompression_test(
     print(f"\n===== Running Compression + Decompression Test (kv_cache={use_kv_cache}) =====")
     
     # Step 1: Compress the data.
-    bit_string, _, compression_result = run_global_mask_experiment(
+    bit_string, _, compression_result = run_global_mask_compression(
         data_path=data_path,
         model_name=model_name,
         context_length=context_length,

@@ -3,28 +3,21 @@ import os
 import torch
 import math
 from pyroaring import BitMap
+import time
 
 class TokenPredictor:
-    def __init__(self, data_path=None, text_input=None, model_name="Qwen/Qwen2.5-0.5B", reduce_tokens=True, chunk_size=None, first_n_tokens=10000):
+    def __init__(self, args, chunk_size=None):
         """
-        Initializes the TokenPredictor class.
-
-        Args:
-            data_path (str, optional): Path to the input text file.
-            text_input (str, optional): Direct text input.
-            model_name (str): HuggingFace model name or path.
-            reduce_tokens (bool): Whether to restrict the token space to distinct tokens in the input data.
-            chunk_size (int, optional): The size of token chunks for dynamic masking. If None, masking is done on the whole data.
-            first_n_tokens (int): Number of initial tokens to consider if reduce_tokens is True.
+        Initialize the TokenPredictor class.
         """
-        if data_path is None and text_input is None:
+        if args.data_path is None and args.text_input is None:
             raise ValueError("Either data_path or text_input must be provided.")
-        if data_path and text_input:
+        if args.data_path and args.text_input:
             raise ValueError("Only one of data_path or text_input can be provided.")
 
         # Load tokenizer and model from cache or download
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=".cache")
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=".cache")
+        self.tokenizer = AutoTokenizer.from_pretrained(args.model_name, cache_dir=".cache")
+        self.model = AutoModelForCausalLM.from_pretrained(args.model_name, cache_dir=".cache")
         self.model.eval()  # Set model to evaluation mode
 
         # Move model to GPU if available
@@ -35,20 +28,23 @@ class TokenPredictor:
             print("GPU not available, using CPU.")
 
         # Load and tokenize input data
-        if data_path:
-            self.data = self._get_data_from_file(data_path)
+        if args.data_path:
+            self.data = self._get_data_from_file(args.data_path)
         else:
-            self.data = text_input
-        
-        print("Starting tokenization...")
-        # Tokenize the entire data, but we might only use a subset based on first_n_tokens
-        full_data_tokens = self.tokenizer.encode(self.data, truncation=False) # Do not truncate here
-        if first_n_tokens is not None:
-             self.data_tokens = full_data_tokens[:first_n_tokens]
-        else:
-             self.data_tokens = full_data_tokens
+            self.data = args.text_input
 
-        self.reduce_tokens = reduce_tokens
+        # Tokenize the text
+        print("Starting tokenization...")
+        start_time = time.time()
+        if args.first_n_tokens is not None:
+            truncated_data = " ".join(self.data.split(" ")[:args.first_n_tokens])
+            self.data_tokens = self.tokenizer.encode(truncated_data, truncation=True, max_length=args.first_n_tokens)
+            assert len(self.data_tokens) == args.first_n_tokens, f"Tokenization produced {len(self.data_tokens)} tokens, expected {args.first_n_tokens}."
+        else:
+            self.data_tokens = self.tokenizer.encode(self.data, truncation=False)
+        print(f"Tokenization complete in {(time.time() - start_time):.2f}s. Total number of tokens: {len(self.data_tokens)}")
+
+        self.reduce_tokens = args.reduce_tokens
         self.chunk_size = chunk_size
         
         if self.reduce_tokens and self.chunk_size is None:
@@ -131,6 +127,43 @@ class TokenPredictor:
         tokens = self.data_tokens
         return list(set(tokens))
 
+    def run_batched_inference(self, prompts, enable_kv_cache=True):
+        # TODO: Add documentation for this method
+
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        if not hasattr(self, "_past_kv"):
+            self._past_kv = None
+
+        with torch.inference_mode():
+            if not enable_kv_cache or self._past_kv is None:
+                max_len = max(len(p) for p in prompts)
+                pad_id = self.tokenizer.pad_token_id
+                input_ids = [
+                    p + [pad_id] * (max_len - len(p))   # right‑pad to same length
+                    for p in prompts
+                ]
+                input_ids = torch.tensor(input_ids, device=device)
+                attention_mask = (input_ids != pad_id).long()
+
+                outputs = self.model(input_ids, use_cache=enable_kv_cache, attention_mask=attention_mask)
+                if enable_kv_cache:
+                    self._past_kv = outputs.past_key_values
+            else:
+                R = len(prompts)
+                delta = [row[-R:] for row in prompts]
+                delta = torch.tensor(delta, device=device, dtype=torch.long)
+
+                outputs = self.model(delta, past_key_values=self._past_kv, use_cache=True)
+                self._past_kv = outputs.past_key_values
+
+            logits = outputs.logits[:, -1, :]
+            if getattr(self, "reduce_tokens", False):
+                logits = logits.index_select(1, self.index_tensor.to(logits.device))
+            probs = torch.softmax(logits, dim=-1)
+
+        return self.tokens_list, probs.cpu().tolist()
+
     def get_token_info(self, prompt_tokens):
         """
         Given a list of prompt tokens, return the list of candidate token IDs and their probabilities.
@@ -160,7 +193,7 @@ class TokenPredictor:
             # Convert logits to probabilities using softmax
             probs = torch.nn.functional.softmax(selected_logits, dim=0)
 
-        return self.tokens_list, probs
+        return self.tokens_list, probs.cpu()
 
     def get_token_info_cache(self, prompt_tokens, use_kv_cache=True):
         """

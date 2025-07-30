@@ -4,14 +4,7 @@ import numpy as np
 import time
 
 
-def run_global_mask_compression(
-    data_path,
-    model_name="Qwen/Qwen2.5-0.5B",
-    context_length=131000,
-    first_n_tokens=10000,
-    use_kv_cache=False,
-    retain_tokens=1000
-):
+def run_global_mask_compression(args):
     """
     Runs the compression experiment using a global token mask.
 
@@ -33,21 +26,16 @@ def run_global_mask_compression(
             - bytes: The serialized bitmap data.
             - dict: A dictionary with compression statistics.
     """
-    print(f"\n----- Running Experiment: Global Token Mask (first_n_tokens={first_n_tokens}, kv_cache={use_kv_cache}) -----")
+    # TODO: A better summary of the experiment's parameters
+    print(f"\n----- Running Experiment: Global Token Mask (first_n_tokens={args.first_n_tokens}, kv_cache={args.use_kv_cache}) -----")
 
     t0_tokenize = time.perf_counter()
-    
+
     # Initialize the token predictor to get tokens and probabilities from the model.
-    token_predictor = TokenPredictor(
-        data_path=data_path,
-        model_name=model_name,
-        reduce_tokens=True,  # Use a reduced vocabulary (global mask)
-        chunk_size=None,
-        first_n_tokens=None
-    )
-    
+    token_predictor = TokenPredictor(args, chunk_size=None)
+
     llm_compressor = LLMCompressor()
-    data_tokens = token_predictor.get_data_tokens()[:first_n_tokens]
+    data_tokens = token_predictor.get_data_tokens()
 
     # Get the compressed bitmap of the vocabulary and its size.
     bitmask_data, bitmap_size_bytes = token_predictor.get_bitmap(compression='roaring')
@@ -55,46 +43,21 @@ def run_global_mask_compression(
     tokenize_time = time.perf_counter() - t0_tokenize
 
     t0_infer = time.perf_counter()
-
-    prompt_tokens = []
     # Process each token in the dataset to compress it.
-    for i in range(len(data_tokens) - 1):
-        prompt_tokens.append(data_tokens[i])
+    for token_idx in range(1, len(data_tokens), args.batch_size):
+        end_token_idx = min(token_idx + args.batch_size, len(data_tokens))
+        prompts = [data_tokens[max(0, i - args.context_length):i] for i in range(token_idx, end_token_idx)]
 
-        # Manage the context window to avoid exceeding the model's limit.
-        if use_kv_cache:
-            # With KV cache, we can keep a shorter, rolling context.
-            if len(prompt_tokens) > context_length:
-                prompt_tokens = prompt_tokens[-retain_tokens:]
-        else:
-            # Without KV cache, maintain a sliding window of the full context length.
-            if len(prompt_tokens) > context_length:
-                prompt_tokens.pop(0)
-        
-        print(f"\rProcessing token {i+1}/{len(data_tokens)}", end='')
-        next_token_actual_index = data_tokens[i+1]
-        
-        # Get the model's predictions for the next token.
-        if use_kv_cache:
-            candidate_token_ids, probs_values = token_predictor.get_token_info_cache(
-                prompt_tokens,
-                use_kv_cache=True
-            )
-        else:
-            candidate_token_ids, probs_values = token_predictor.get_token_info(prompt_tokens)
-        
-        # probs_values_np = np.array(probs_values)
-        probs_values_np = probs_values.cpu().numpy()
+        print(f"\rProcessing batch {token_idx // args.batch_size + 1}/{(len(data_tokens) + args.batch_size - 1) // args.batch_size}", end='')
 
-        # Find the index of the actual next token within the candidate tokens.
-        try:
-            token_idx_for_compressor = candidate_token_ids.index(next_token_actual_index)
-        except ValueError:
-            print(f"\nFATAL: Token {next_token_actual_index} not in global vocabulary. This should not happen.")
-            break
-        
-        # Provide the actual token's index and the probability distribution to the compressor.
-        llm_compressor.next_token(token_idx_for_compressor, probs_values_np)
+        # Run LLM inference
+        token_ids, probs_values = token_predictor.run_batched_inference(prompts)
+        actual_next_tokens = [data_tokens[idx] for idx in range(token_idx, end_token_idx)]
+        actual_next_tokens = [token_ids.index(token) for token in actual_next_tokens]
+
+        # Provide the actual token's indexes and the probability distributions to the compressor.
+        for idx, probs in enumerate(np.array(probs_values)):
+            llm_compressor.next_token(actual_next_tokens[idx], probs)
 
     inference_time = time.perf_counter() - t0_infer
 
@@ -107,7 +70,7 @@ def run_global_mask_compression(
     original_size = len(token_predictor.detokenize(data_tokens)) * 8
 
     return bit_string, bitmask_data, {
-        "first_n_tokens": first_n_tokens,
+        "first_n_tokens": args.first_n_tokens,
         "chunk_size": -1, # -1 indicates global mask, not chunking
         "arithmetic_code_size_bits": total_arithmetic_code_size,
         "bitmap_size_bits": total_bitmap_size,

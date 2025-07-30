@@ -6,21 +6,15 @@ from llm_compressor import LLMCompressor
 
 
 
-def run_compression_analysis(data_path=None, text_input=None, roaring_ranking_n=None, model_name="Qwen/Qwen2.5-0.5B", reduce_tokens=True, first_n_tokens=10000, context_length=512):
-    if data_path is None and text_input is None:
+def run_compression_analysis(args):
+    if args.data_path is None and args.text_input is None:
         raise ValueError("Either data_path or text_input must be provided.")
-    if data_path and text_input:
+    if args.data_path and args.text_input:
         raise ValueError("Only one of data_path or text_input can be provided.")
 
-    print(f"Input source: {'File' if data_path else 'Text'}")
+    print(f"Input source: {'File' if args.data_path else 'Text'}")
 
-    token_predictor = TokenPredictor(
-        data_path=data_path,
-        text_input=text_input,
-        model_name=model_name,
-        reduce_tokens=reduce_tokens,
-        first_n_tokens=first_n_tokens
-    )
+    token_predictor = TokenPredictor(args)
     llm_compressor = LLMCompressor()
 
     data_tokens = token_predictor.get_data_tokens()
@@ -34,7 +28,7 @@ def run_compression_analysis(data_path=None, text_input=None, roaring_ranking_n=
     for i in range(len(data_tokens) - 1):
         prompt_tokens.append(data_tokens[i])
         # pop the first token if the prompt is too long
-        if len(prompt_tokens) > context_length:
+        if len(prompt_tokens) > args.context_length:
             prompt_tokens.pop(0)
         
         print(f"\rProcessing token {i+1}/{len(data_tokens)}", end='')
@@ -42,7 +36,7 @@ def run_compression_analysis(data_path=None, text_input=None, roaring_ranking_n=
         next_token_actual_index = data_tokens[i+1]
 
         # Determine which probability distribution to use for the current token
-        if roaring_ranking_n is not None and i < roaring_ranking_n:
+        if args.roaring_ranking_n is not None and i < args.roaring_ranking_n:
             # Use full vocabulary for the first N tokens for both probs_sum and compression
             candidate_token_ids_for_compression, probs_values_for_compression = token_predictor.get_full_token_info(prompt_tokens)
             probs_values_for_compression_np = np.array(probs_values_for_compression)
@@ -79,11 +73,11 @@ def run_compression_analysis(data_path=None, text_input=None, roaring_ranking_n=
     bit_string = llm_compressor.compress()
 
     final_size = 0
-    birmap_size = 0
+    bitmap_size = 0
     rank_list = None
 
-    if reduce_tokens:
-        if roaring_ranking_n is not None:
+    if args.reduce_tokens:
+        if args.roaring_ranking_n is not None:
             # Get distinct tokens from the first N tokens based on probs_sum
             # Sort indices in descending order of accumulated probability
             sorted_indices = np.argsort(probs_sum)[::-1]
@@ -101,40 +95,29 @@ def run_compression_analysis(data_path=None, text_input=None, roaring_ranking_n=
             rank_list.sort() # Roaring bitmap expects sorted list
             
             bitmap_compression = 'roaring_ranking'
-            _, birmap_size = token_predictor.get_bitmap(compression=bitmap_compression, ranking=rank_list)
+            _, bitmap_size = token_predictor.get_bitmap(compression=bitmap_compression, ranking=rank_list)
         else:
             bitmap_compression = 'roaring'
-            _, birmap_size = token_predictor.get_bitmap(compression=bitmap_compression)
+            _, bitmap_size = token_predictor.get_bitmap(compression=bitmap_compression)
         
-        final_size = len(bit_string) + birmap_size * 8
+        final_size = len(bit_string) + bitmap_size * 8
     else:
         final_size = len(bit_string)
 
     decoded_string_length = len(token_predictor.detokenize(data_tokens)) * 8
 
-    print(f"\nTokenized length: {len(data_tokens)} tokens")
-    print(f"Length of bit string: {len(bit_string)} bits")
-    if reduce_tokens:
-        print(f"Bitmap size: {birmap_size * 8} bits")
-    print(f"Final compressed size: {final_size} bits")
-    print(f"Decoded string length: {decoded_string_length} bits")
-    print(f"Compression ratio: {final_size / decoded_string_length * 100:.4f} %")
-    print(f"Entropy: {entropy:.4f}")
-
     return {
-        'roaring_ranking_n': roaring_ranking_n,
-        'reduce_tokens': reduce_tokens,
-        'first_n_tokens': first_n_tokens,
-        'context_length': context_length,
+        'args': args,
+        'tokenized_length': len(data_tokens),
         'decoded_length_bits': decoded_string_length,
         'arithmetic_code_size_bits': len(bit_string),
-        'bitmap_size_bits': birmap_size * 8,
+        'bitmap_size_bits': bitmap_size * 8,
         'final_size_bits': final_size,
         'compression_ratio_percent': final_size / decoded_string_length * 100,
         'entropy': entropy
     }
 
-def main():
+def get_parser_args():
     parser = argparse.ArgumentParser(description="Run LLM compression with various options.")
     parser.add_argument("--data_path", type=str, required=False,
                         help="The input text file path for LLM inference.")
@@ -150,19 +133,12 @@ def main():
                         help="Number of initial tokens to consider if reduce_tokens is True.")
     parser.add_argument("--context_length", type=int, default=1000,
                         help="The maximum context length for the LLM.")
+    return parser.parse_args()
 
-    args = parser.parse_args()
+def main():
     print(f"starting compression")
-    results = run_compression_analysis(
-        data_path=args.data_path,
-        text_input=args.text_input,
-        roaring_ranking_n=args.roaring_ranking_n,
-        model_name=args.model_name,
-        reduce_tokens=args.reduce_tokens,
-        first_n_tokens=args.first_n_tokens,
-        context_length=args.context_length
-    )
-    print("\n--- Results ---")
+    results = run_compression_analysis(get_parser_args())
+    print("--- Results ---")
     for key, value in results.items():
         print(f"{key}: {value}")
 

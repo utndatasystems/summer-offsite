@@ -32,7 +32,9 @@ def main():
     parser.add_argument("--retain_tokens", type=int, default=100, help="Tokens retained when context length exceeded (only with KV cache)")
     parser.add_argument("--first_n_tokens", type=int, default=10000, help="Number of tokens to compress")
     parser.add_argument("--use_kv_cache", action="store_true", help="Enable KV cache for compression")
-
+    parser.add_argument("--text_input", type=str, required=False, help="The direct text input for LLM inference.")
+    parser.add_argument("--reduce_tokens", type=bool, default=True, help="Whether to restrict the token space to distinct tokens in the input data.")
+    parser.add_argument("--batch_size", type=int, default=1, help="Batch size for LLM inference")
     args = parser.parse_args()
 
     # ========================
@@ -41,10 +43,10 @@ def main():
     results_db = load_results()
     exp_key = make_key(args)
 
-    if exp_key in results_db:
-        print(f"\n⚠️ Experiment already exists for {exp_key}, skipping run.")
-        print(f"Stored Results: {results_db[exp_key]}")
-        return
+    # if exp_key in results_db:
+    #     print(f"\n⚠️ Experiment already exists for {exp_key}, skipping run.")
+    #     print(f"Stored Results: {results_db[exp_key]}")
+    #     return
 
     # ========================
     # Print experiment settings
@@ -60,14 +62,7 @@ def main():
     # ========================
     # Run compression experiment
     # ========================
-    bit_string, bitmask_data, stats = run_global_mask_compression(
-        data_path=args.data_path,
-        model_name=args.model_name,
-        context_length=args.context_length,
-        first_n_tokens=args.first_n_tokens,
-        use_kv_cache=args.use_kv_cache,
-        retain_tokens=args.retain_tokens
-    )
+    bit_string, bitmask_data, stats = run_global_mask_compression(args)
 
     # ========================
     # Save results

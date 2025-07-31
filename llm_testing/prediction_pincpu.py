@@ -128,6 +128,13 @@ class TokenPredictor:
         else:
             print("GPU not available, using CPU.")
 
+        # pin the 
+        self.probs_cpu = torch.empty(
+            (args.batch_size, len(self.tokens_list)),
+            dtype=torch.float32,
+            pin_memory=True
+        )
+
     def _set_active_chunk(self, chunk_index):
         """
         Sets the active token mask based on the tokens in the specified chunk.
@@ -218,7 +225,10 @@ class TokenPredictor:
                 logits = logits.index_select(1, self.index_tensor.to(logits.device))
             probs = torch.softmax(logits, dim=-1)
 
-        return self.tokens_list, probs.cpu()
+            self.probs_cpu.copy_(probs, non_blocking=True)
+            torch.cuda.synchronize()
+
+        return self.tokens_list, self.probs_cpu
 
     def get_token_info(self, prompt_tokens):
         """

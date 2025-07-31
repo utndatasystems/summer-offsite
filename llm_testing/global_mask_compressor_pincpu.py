@@ -1,9 +1,8 @@
-from llm_testing.llm_compressor import LLMCompressor, LLMDecompressor
-from llm_testing.prediction import TokenDataPreparer, TokenPredictor
+from llm_compressor import LLMCompressor, LLMDecompressor
+from llm_testing.prediction_pincpu import TokenDataPreparer, TokenPredictor
 from itertools import chain
 import numpy as np
 import time
-import math
 
 def run_global_mask_compression(args):
     """

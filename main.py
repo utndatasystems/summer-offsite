@@ -128,6 +128,7 @@ def main():
         print(f"  Retain tokens    : {args.retain_tokens}")
         print(f"  First n tokens   : {args.first_n_tokens}")
         print(f"  Use KV cache     : {args.use_kv_cache}")
+        print(f"  Batch size       : {args.batch_size}")
 
         print("\n===== Decompress Data =====")
         _, results, decomp_stats = run_global_mask_decompression(

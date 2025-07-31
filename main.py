@@ -22,7 +22,8 @@ def save_results(results):
 
 def make_key(args):
     """Generate a unique key for experiment settings."""
-    return f"{args.model_name}|ctx={args.context_length}|ret={args.retain_tokens}|n={args.first_n_tokens}|kv={args.use_kv_cache}"
+    filename = os.path.basename(args.input_path)
+    return f"{filename}:{args.model_name}|ctx={args.context_length}|ret={args.retain_tokens}|n={args.first_n_tokens}|kv={args.use_kv_cache}|batch={args.batch_size}"
 
 def main():
     # ========================
@@ -54,9 +55,8 @@ def main():
         # ========================
         # Check if experiment already exists
         # ========================
-        results_db = load_results()
-        exp_key = make_key(args)
-
+        # results_db = load_results()
+        # exp_key = make_key(args)
         # if exp_key in results_db:
         #     print(f"\n⚠️ Experiment already exists for {exp_key}, skipping run.")
         #     print(f"Stored Results: {results_db[exp_key]}")
@@ -72,16 +72,21 @@ def main():
         print(f"  Retain tokens    : {args.retain_tokens}")
         print(f"  First n tokens   : {args.first_n_tokens}")
         print(f"  Use KV cache     : {args.use_kv_cache}")
+        print(f"  Batch size       : {args.batch_size}")
 
         # ========================
         # Run compression experiment
         # ========================
-        first_token, bit_string, bitmask_data, stats = run_global_mask_compression(args)
+        first_token, bit_string, bitmask_data, comp_stats, args = run_global_mask_compression(args)
 
         # ========================
         # Save results (JSON stats)
         # ========================
-        results_db[exp_key] = stats
+        results_db = load_results()
+        exp_key = make_key(args)
+        if exp_key not in results_db:
+            results_db[exp_key] = {}
+        results_db[exp_key]["compression"] = comp_stats
         save_results(results_db)
 
         # ========================
@@ -98,7 +103,7 @@ def main():
         # Output compression results
         # ========================
         print("\n\n===== Compression Results =====")
-        for k, v in stats.items():
+        for k, v in comp_stats.items():
             print(f"{k}: {v}")
 
     elif args.mode == "decompress":
@@ -115,6 +120,8 @@ def main():
         print(f"\nLoading compression file: {args.input_path}")
         args, first_token, bit_string, bitmask_data = load_global_mask_file(args)
 
+        exp_key = make_key(args)
+
         print("\n===== Loaded Header =====")
         print(f"  Model            : {args.model_name}")
         print(f"  Context length   : {args.context_length}")
@@ -123,15 +130,27 @@ def main():
         print(f"  Use KV cache     : {args.use_kv_cache}")
 
         print("\n===== Decompress Data =====")
-        _, results = run_global_mask_decompression(
+        _, results, decomp_stats = run_global_mask_decompression(
             args=args,
-            first_token=first_token,
+            first_tokens=first_token,
             bit_string=bit_string,
             bitmap=bitmask_data
         )
 
-        print("\n\n===== Decompression Results =====")
-        print(f"{results[:100]} ... (truncated)")
+        # ========================
+        # Save results (JSON stats)
+        # ========================
+        results_db = load_results()
+        exp_key = make_key(args)
+        if exp_key not in results_db:
+            results_db[exp_key] = {}
+        results_db[exp_key]["decompression"] = decomp_stats
+        save_results(results_db)
+
+        print("\n\n===== Compression Results =====")
+        for k, v in decomp_stats.items():
+            print(f"{k}: {v}")
+        # print(f"{results[:100]} ... (truncated)")
 
         # Save the reconstructed text to a file
         with open(args.output_path, "w") as f:

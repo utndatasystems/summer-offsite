@@ -181,35 +181,42 @@ class TokenPredictor:
 
         if not hasattr(self, "_past_kv"):
             self._past_kv = None
+            self._cached_context_len = 0
 
         with torch.inference_mode():
-            if not enable_kv_cache or self._past_kv is None:
-                max_len = max(len(p) for p in prompts)
-                pad_id = self.tokenizer.pad_token_id
-                input_ids = [
-                    p + [pad_id] * (max_len - len(p))   # right‑pad to same length
-                    for p in prompts
-                ]
-                input_ids = torch.tensor(input_ids, device=device)
-                attention_mask = (input_ids != pad_id).long()
-
-                outputs = self.model(input_ids, use_cache=enable_kv_cache, attention_mask=attention_mask)
-                if enable_kv_cache:
-                    self._past_kv = outputs.past_key_values
+            if not enable_kv_cache:
+                # If not using cache, run the model on the full prompt every time.
+                input_ids = torch.tensor(prompts, device=device)
+                outputs = self.model(input_ids, use_cache=enable_kv_cache)
+                # Ensure cache is cleared when not in use.
+                self._past_kv = None
+                self._cached_context_len = 0
             else:
-                R = len(prompts)
-                delta = [row[-R:] for row in prompts]
-                delta = torch.tensor(delta, device=device, dtype=torch.long)
+                # Check if the cache needs to be reset. This happens if the external
+                # context management has shortened the prompt.
+                reset_cache = len(prompts[0]) < self._cached_context_len
 
-                outputs = self.model(delta, past_key_values=self._past_kv, use_cache=True)
-                self._past_kv = outputs.past_key_values
+                if self._past_kv is None or reset_cache:
+                    # Rebuild the cache from the full prompt.
+                    input_ids = torch.tensor(prompts, device=device)
+                    outputs = self.model(input_ids, use_cache=True)
+                    self._past_kv = outputs.past_key_values
+                    self._cached_context_len = 0
+                else:
+                    # Incremental step: process only the last token using the existing cache.
+                    delta = [row[-1:] for row in prompts]
+                    delta = torch.tensor(delta, device=device, dtype=torch.long)
+
+                    outputs = self.model(delta, past_key_values=self._past_kv, use_cache=True)
+                    self._past_kv = outputs.past_key_values
+                    self._cached_context_len += 1
 
             logits = outputs.logits[:, -1, :]
             if getattr(self, "reduce_tokens", False):
                 logits = logits.index_select(1, self.index_tensor.to(logits.device))
             probs = torch.softmax(logits, dim=-1)
 
-        return self.tokens_list, probs.cpu().tolist()
+        return self.tokens_list, probs.cpu()
 
     def get_token_info(self, prompt_tokens):
         """

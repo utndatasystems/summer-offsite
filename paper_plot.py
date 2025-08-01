@@ -127,17 +127,22 @@ def merge_results(model_data, baseline_data):
     return merged
 
 
-def results_plot_1(datasets):
+def results_plot_1(datasets, dataset_order):
     """
     Plot compression ratio breakdown:
     - Model compressors (with AC + Bitmap) as stacked bars.
     - Baseline compressors (no AC/Bitmap split) as single bars.
     """
-    fig, axes = plt.subplots(1, len(datasets), figsize=(10, 6))
-    if len(datasets) == 1:
+    fig, axes = plt.subplots(1, len(dataset_order), figsize=(10, 6))
+
+    if len(dataset_order) == 1:
         axes = [axes]
 
-    for idx, (dataset, comp_dict) in enumerate(datasets.items()):
+    for idx, dataset in enumerate(dataset_order):
+        if dataset not in datasets:
+            continue
+        comp_dict = datasets[dataset]
+        
         ax = axes[idx]
         ax.set_title(f"Compression Ratio Breakdown - {dataset}")
 
@@ -164,9 +169,7 @@ def results_plot_1(datasets):
                 is_model_type.append(False)
 
         # Labels to avoid duplicate legend entries
-        ac_label_added = False
-        bitmap_label_added = False
-        baseline_label_added = False
+        ac_label_added = bitmap_label_added = baseline_label_added = False
 
         # Plot bars
         for i, comp_name in enumerate(models):
@@ -207,7 +210,7 @@ def results_plot_1(datasets):
     print("Plots saved as compression_ratio_stack_plot.png")
 
 
-def results_plot_2(datasets):
+def results_plot_2(datasets, dataset_order):
     """
     Plot compression & decompression speed vs compression ratio:
     - X-axis: Compression Ratio (%)
@@ -224,33 +227,39 @@ def results_plot_2(datasets):
         "zstd --ultra -22": "black",
         "xz -9e (LZMA2)": "gainsboro",
         "Qwen/Qwen2.5-0.5B": "tab:blue",
-        "Qwen/Qwen3-1.7B": "tab:orange",
-        "Qwen/Qwen3-7B": "tab:green"
+        "Qwen/Qwen2.5-1.5B": "tab:orange",
+        "Qwen/Qwen2.5-7B": "tab:green",
+        "Qwen/Qwen2.5-14B": "tab:red",
+        "Qwen/Qwen3-0.6B": "tab:purple",
+        "Qwen/Qwen3-1.7B": "tab:brown",
+        "Qwen/Qwen3-7B": "tab:pink",
+        "Qwen/Qwen3-14B": "tab:cyan",
     }
 
     # ===== Compression Speed Plot =====
-    fig_c, axes_c = plt.subplots(1, len(datasets), figsize=(10, 6))
-    if len(datasets) == 1:
+    fig_c, axes_c = plt.subplots(1, len(dataset_order), figsize=(10, 6))
+    if len(dataset_order) == 1:
         axes_c = [axes_c]
 
-    for idx, (dataset, comp_dict) in enumerate(datasets.items()):
+    for idx, dataset in enumerate(dataset_order):
+        if dataset not in datasets:
+            continue
+        comp_dict = datasets[dataset]
+        
         ax_c = axes_c[idx]
         ax_c.set_title(f"Compression Speed - {dataset}")
 
         for comp_name, m in comp_dict.items():
             orig_bits = m["original_size_bits"]
             comp_bits = m["compressed_size_bits"]
-
             ratio_percent = (comp_bits / orig_bits) * 100 if orig_bits else 0
             speed_KBps = (orig_bits / 8 / 1e3) / m["compression_time"] if m["compression_time"] > 0 else 0
-
             color = color_map.get(comp_name, "tab:red")
             ax_c.scatter(ratio_percent, speed_KBps, color=color, label=comp_name)
 
         ax_c.set_xlabel("Compression Ratio (%)")
         ax_c.set_ylabel("Compression Speed (KB/s)")
         ax_c.set_yscale("log")
-
         handles, labels = ax_c.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         ax_c.legend(by_label.values(), by_label.keys())
@@ -267,28 +276,29 @@ def results_plot_2(datasets):
     plt.close()
 
     # ===== Decompression Speed Plot =====
-    fig_d, axes_d = plt.subplots(1, len(datasets), figsize=(10, 6))
-    if len(datasets) == 1:
+    fig_d, axes_d = plt.subplots(1, len(dataset_order), figsize=(10, 6))
+    if len(dataset_order) == 1:
         axes_d = [axes_d]
 
-    for idx, (dataset, comp_dict) in enumerate(datasets.items()):
+    for idx, dataset in enumerate(dataset_order):
+        if dataset not in datasets:
+            continue
+        comp_dict = datasets[dataset]
+        
         ax_d = axes_d[idx]
         ax_d.set_title(f"Decompression Speed - {dataset}")
 
         for comp_name, m in comp_dict.items():
             orig_bits = m["original_size_bits"]
             comp_bits = m["compressed_size_bits"]
-
             ratio_percent = (comp_bits / orig_bits) * 100 if orig_bits else 0
             speed_KBps = (comp_bits / 8 / 1e3) / m["decompression_time"] if m["decompression_time"] > 0 else 0
-
             color = color_map.get(comp_name, "tab:red")
             ax_d.scatter(ratio_percent, speed_KBps, color=color, label=comp_name)
 
         ax_d.set_xlabel("Compression Ratio (%)")
         ax_d.set_ylabel("Decompression Speed (KB/s)")
         ax_d.set_yscale("log")
-
         handles, labels = ax_d.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         ax_d.legend(by_label.values(), by_label.keys())
@@ -308,9 +318,11 @@ def results_plot_2(datasets):
 
 
 # ===== Example Usage =====
+dataset_order = ["text8", "combined_100mb.py"]
+
 model_data = load_model_results(
     "compression_results.json",
-    selected_datasets=["text8", "combined_100mb.py"],
+    selected_datasets=dataset_order,
     selected_n=[500000]
 )
 
@@ -331,5 +343,5 @@ final_data = merge_results(model_data, baseline_text8)
 final_data = merge_results(final_data, pytorrent_data)
 
 # Plot results
-results_plot_1(final_data)
-results_plot_2(final_data)
+results_plot_1(final_data, dataset_order)
+results_plot_2(final_data, dataset_order)

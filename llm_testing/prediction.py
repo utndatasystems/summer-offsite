@@ -107,7 +107,7 @@ class TokenPredictor:
 
         # Load tokenizer and model from cache or download
         self.tokenizer = AutoTokenizer.from_pretrained(args.model_name, cache_dir=".cache")
-        self.model = AutoModelForCausalLM.from_pretrained(args.model_name, cache_dir=".cache")
+        self.model = AutoModelForCausalLM.from_pretrained(args.model_name, cache_dir=".cache", device_map="auto")
         self.model.eval()  # Set model to evaluation mode
 
         # --- If bitmap_data is provided, reconstruct tokens_list & index_tensor ---

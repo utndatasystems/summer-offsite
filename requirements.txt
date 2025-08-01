@@ -3,3 +3,5 @@ hf_xet
 torch
 matplotlib
 seaborn
+pyroaring
+accelerate

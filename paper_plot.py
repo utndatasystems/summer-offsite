@@ -22,14 +22,15 @@ def load_model_results(file_path, selected_datasets=None, selected_n=None):
     Loads model JSON results and flattens into a dictionary of:
         dataset → model → compression/decompression data.
     
-    Keeps only the **highest batch size** entry for each dataset+n+model.
+    Keeps only the **fastest compression time** entry for each dataset+model.
+    Adds ctx and ret to the output.
     Filters results by dataset and n if specified.
     """
     with open(file_path, "r") as f:
         results = json.load(f)
 
-    # Temporary store to ensure we keep only the largest batch for each dataset/model/n
-    temp_store = defaultdict(lambda: defaultdict(dict))  # dataset → model → best entry
+    # Temporary store: dataset → model → best entry (fastest compression time)
+    temp_store = defaultdict(lambda: defaultdict(dict))
 
     for key, value in results.items():
         dataset_name, model_info = key.split(":", 1)
@@ -37,16 +38,22 @@ def load_model_results(file_path, selected_datasets=None, selected_n=None):
 
         model_name = parts[0]
         n_value = None
+        ctx_value = None
+        ret_value = None
         batch_value = None
 
-        # Extract n= and batch= values from the model info
+        # Extract ctx, ret, n, batch
         for p in parts:
             if p.startswith("n="):
                 n_value = int(p.split("=")[1])
+            elif p.startswith("ctx="):
+                ctx_value = int(p.split("=")[1])
+            elif p.startswith("ret="):
+                ret_value = int(p.split("=")[1])
             elif p.startswith("batch="):
                 batch_value = int(p.split("=")[1])
 
-        # Filter datasets/n values if user requested
+        # Filter datasets/n values if specified
         if selected_datasets and dataset_name not in selected_datasets:
             continue
         if selected_n and n_value not in selected_n:
@@ -55,25 +62,28 @@ def load_model_results(file_path, selected_datasets=None, selected_n=None):
         comp = value.get("compression", {})
         decomp = value.get("decompression", {})
 
-        # Keep only the largest batch for this dataset/model
-        if model_name not in temp_store[dataset_name] or batch_value > temp_store[dataset_name][model_name]["batch"]:
+        compression_time = comp.get("total_compression_time_sec", float("inf"))
+
+        # Keep fastest compression time (smallest total_compression_time_sec)
+        existing = temp_store[dataset_name].get(model_name)
+        if not existing or compression_time < existing["compression_time"]:
             temp_store[dataset_name][model_name] = {
                 "batch": batch_value,
                 "original_size_bits": comp.get("original_size_bits", 0),
                 "ac_bits": comp.get("arithmetic_code_size_bits", 0),
                 "bitmap_bits": comp.get("bitmap_size_bits", 0),
                 "compressed_size_bits": comp.get("final_size_bits", 0),
-                "compression_time": comp.get("total_compression_time_sec", 0),
-                "decompression_time": decomp.get("decompression_time_sec", 0)
+                "compression_time": compression_time,
+                "decompression_time": decomp.get("decompression_time_sec", 0),
+                "ctx": ctx_value,
+                "ret": ret_value
             }
 
-    # Convert to final format (remove batch value)
+    # Convert to final output
     datasets = defaultdict(dict)
     for dataset_name, models in temp_store.items():
         for model_name, info in models.items():
-            datasets[dataset_name][model_name] = {
-                k: v for k, v in info.items() if k != "batch"
-            }
+            datasets[dataset_name][model_name] = info
     return datasets
 
 
@@ -142,7 +152,7 @@ def results_plot_1(datasets, dataset_order):
         if dataset not in datasets:
             continue
         comp_dict = datasets[dataset]
-        
+
         ax = axes[idx]
         ax.set_title(f"Compression Ratio Breakdown - {dataset}")
 
@@ -213,7 +223,7 @@ def results_plot_1(datasets, dataset_order):
 def results_plot_2(datasets, dataset_order):
     """
     Plot compression & decompression speed vs compression ratio:
-    - X-axis: Compression Ratio (%)
+    - X-axis: Compression Ratio
     - Y-axis: KB/s (log scale)
     - Color: Compressor model
     """
@@ -224,17 +234,43 @@ def results_plot_2(datasets, dataset_order):
         "zstd -3": "lightgray",
         "zstd -1": "silver",
         "zstd -19": "darkgray",
-        "zstd --ultra -22": "black",
+        "distilgpt2": "silver",
+        "openai-community/gpt2": "lightblue",
         "xz -9e (LZMA2)": "gainsboro",
         "Qwen/Qwen2.5-0.5B": "tab:blue",
         "Qwen/Qwen2.5-1.5B": "tab:orange",
         "Qwen/Qwen2.5-7B": "tab:green",
-        "Qwen/Qwen2.5-14B": "tab:red",
         "Qwen/Qwen3-0.6B": "tab:purple",
         "Qwen/Qwen3-1.7B": "tab:brown",
-        "Qwen/Qwen3-7B": "tab:pink",
-        "Qwen/Qwen3-14B": "tab:cyan",
+        "Qwen/Qwen3-8B": "tab:pink",
+        "meta-llama/Llama-3.2-1B": "tab:olive",
+        "HuggingFaceTB/SmolLM-135M": "tab:red",
+        "HuggingFaceTB/SmolLM2-135M": "tab:cyan"
     }
+
+    symbol_map = {
+        "zip": "o",
+        "gzip": "o",
+        "zstd -3": "o",
+        "zstd -1": "o",
+        "zstd -19": "o",
+        "distilgpt2": "x",
+        "openai-community/gpt2": "x",
+        "xz -9e (LZMA2)": "o",
+        "Qwen/Qwen2.5-0.5B": "*",
+        "Qwen/Qwen2.5-1.5B": "*",
+        "Qwen/Qwen2.5-7B": "*",
+        "Qwen/Qwen2.5-14B": "*",
+        "Qwen/Qwen3-0.6B": "s",
+        "Qwen/Qwen3-1.7B": "s",
+        "Qwen/Qwen3-8B": "s",
+        "Qwen/Qwen3-14B": "s",
+        "meta-llama/Llama-3.2-1B": "D",
+        "HuggingFaceTB/SmolLM-135M": "h",
+        "HuggingFaceTB/SmolLM2-135M": "h"
+    }
+
+    color_order = list(color_map.keys())
 
     # ===== Compression Speed Plot =====
     fig_c, axes_c = plt.subplots(1, len(dataset_order), figsize=(10, 6))
@@ -249,20 +285,28 @@ def results_plot_2(datasets, dataset_order):
         ax_c = axes_c[idx]
         ax_c.set_title(f"Compression Speed - {dataset}")
 
+        gzip_compression_ratio = comp_dict.get("gzip", {}).get("original_size_bits", 0) / comp_dict.get("gzip", {}).get("compressed_size_bits", 0)
+
         for comp_name, m in comp_dict.items():
             orig_bits = m["original_size_bits"]
             comp_bits = m["compressed_size_bits"]
-            ratio_percent = (comp_bits / orig_bits) * 100 if orig_bits else 0
-            speed_KBps = (orig_bits / 8 / 1e3) / m["compression_time"] if m["compression_time"] > 0 else 0
+            # ratio_percent = (comp_bits / orig_bits) * 100 if orig_bits else 0
+            ratio_percent = (orig_bits / comp_bits) / gzip_compression_ratio
+            speed_KBps = (orig_bits / 8 / 1024) / m["compression_time"] if m["compression_time"] > 0 else 0
             color = color_map.get(comp_name, "tab:red")
-            ax_c.scatter(ratio_percent, speed_KBps, color=color, label=comp_name)
+            ax_c.scatter(ratio_percent, speed_KBps, color=color, label=comp_name, marker=symbol_map.get(comp_name, 'o'))
 
-        ax_c.set_xlabel("Compression Ratio (%)")
+        ax_c.set_xlabel("Compression Ratio (Normalized to Gzip)")
         ax_c.set_ylabel("Compression Speed (KB/s)")
         ax_c.set_yscale("log")
         handles, labels = ax_c.get_legend_handles_labels()
-        by_label = dict(zip(labels, handles))
-        ax_c.legend(by_label.values(), by_label.keys())
+        sorted_items = sorted(
+            zip(labels, handles),
+            key=lambda x: color_order.index(x[0]) if x[0] in color_order else len(color_order)
+        )
+
+        sorted_labels, sorted_handles = zip(*sorted_items)
+        ax_c.legend(sorted_handles, sorted_labels)
 
     plt.tight_layout()
     plt.savefig("compression_speed_plot.png")
@@ -284,24 +328,32 @@ def results_plot_2(datasets, dataset_order):
         if dataset not in datasets:
             continue
         comp_dict = datasets[dataset]
-        
+
         ax_d = axes_d[idx]
         ax_d.set_title(f"Decompression Speed - {dataset}")
+
+        gzip_compression_ratio = comp_dict.get("gzip", {}).get("original_size_bits", 0) / comp_dict.get("gzip", {}).get("compressed_size_bits", 0)
 
         for comp_name, m in comp_dict.items():
             orig_bits = m["original_size_bits"]
             comp_bits = m["compressed_size_bits"]
-            ratio_percent = (comp_bits / orig_bits) * 100 if orig_bits else 0
-            speed_KBps = (comp_bits / 8 / 1e3) / m["decompression_time"] if m["decompression_time"] > 0 else 0
+            # ratio_percent = (comp_bits / orig_bits) * 100 if orig_bits else 0
+            ratio_percent = (orig_bits / comp_bits) / gzip_compression_ratio
+            speed_KBps = (comp_bits / 8 / 1024) / m["decompression_time"] if m["decompression_time"] > 0 else 0
             color = color_map.get(comp_name, "tab:red")
-            ax_d.scatter(ratio_percent, speed_KBps, color=color, label=comp_name)
+            ax_d.scatter(ratio_percent, speed_KBps, color=color, label=comp_name, marker=symbol_map.get(comp_name, 'o'))
 
-        ax_d.set_xlabel("Compression Ratio (%)")
+        ax_d.set_xlabel("Compression Ratio (Normalized to Gzip)")
         ax_d.set_ylabel("Decompression Speed (KB/s)")
         ax_d.set_yscale("log")
         handles, labels = ax_d.get_legend_handles_labels()
-        by_label = dict(zip(labels, handles))
-        ax_d.legend(by_label.values(), by_label.keys())
+        sorted_items = sorted(
+            zip(labels, handles),
+            key=lambda x: color_order.index(x[0]) if x[0] in color_order else len(color_order)
+        )
+
+        sorted_labels, sorted_handles = zip(*sorted_items)
+        ax_d.legend(sorted_handles, sorted_labels)
 
     plt.tight_layout()
     plt.savefig("decompression_speed_plot.png")
@@ -317,31 +369,34 @@ def results_plot_2(datasets, dataset_order):
     print("Plots saved as compression_speed_plot.png and decompression_speed_plot.png")
 
 
-# ===== Example Usage =====
-dataset_order = ["text8", "combined_100mb.py"]
+if __name__ == "__main__":
+    # ===== Example Usage =====
+    dataset_order = ["text8", "combined_100mb.py"]
 
-model_data = load_model_results(
-    "compression_results.json",
-    selected_datasets=dataset_order,
-    selected_n=[500000]
-)
+    model_data = load_model_results(
+        "compression_results.json",
+        selected_datasets=dataset_order,
+        selected_n=[500000]
+    )
 
-baseline_text8 = load_baseline_csv(
-    "text8_baseline.csv",
-    dataset_name="text8",
-    selected_compressors=["gzip"]
-)
+    baseline_text8 = load_baseline_csv(
+        "text8_baseline.csv",
+        dataset_name="text8",
+        selected_compressors=["gzip"]
+    )
 
-pytorrent_data = load_baseline_csv(
-    "pytorrent_baseline.csv",
-    dataset_name="combined_100mb.py",
-    selected_compressors=["gzip"]
-)
+    pytorrent_data = load_baseline_csv(
+        "pytorrent_baseline.csv",
+        dataset_name="combined_100mb.py",
+        selected_compressors=["gzip"]
+    )
 
-# Merge results (model + baselines)
-final_data = merge_results(model_data, baseline_text8)
-final_data = merge_results(final_data, pytorrent_data)
+    print("Loaded model data:", json.dumps(model_data, indent=2))
 
-# Plot results
-results_plot_1(final_data, dataset_order)
-results_plot_2(final_data, dataset_order)
+    # Merge results (model + baselines)
+    final_data = merge_results(model_data, baseline_text8)
+    final_data = merge_results(final_data, pytorrent_data)
+
+    # Plot results
+    results_plot_1(final_data, dataset_order)
+    results_plot_2(final_data, dataset_order)

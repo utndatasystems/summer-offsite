@@ -5,7 +5,7 @@ from llm_testing.global_mask_compressor import run_global_mask_compression, run_
 from llm_testing.utils import save_global_mask_file, load_global_mask_file
 
 RESULTS_FILE = "compression_results.json"
-COMPRESSION_FILE = "compression_data.gmc"
+COMPRESSION_FILE = "compression_data.bin"
 DECOMPRESSION_FILE = "text_results.txt"
 
 def load_results():

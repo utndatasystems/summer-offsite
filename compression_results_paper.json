@@ -1,0 +1,586 @@
+{
+    "combined_100mb.py:Qwen/Qwen2.5-0.5B|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 15976392,
+            "arithmetic_code_size_bits": 1186263,
+            "bitmap_size_bits": 117968,
+            "final_size_bits": 1304231,
+            "pure_compression_ratio_percent": 7.425099484289069,
+            "compression_ratio_percent": 8.16348897798702,
+            "tokenize_time_sec": 3.4979183660000217,
+            "inference_time_sec": 349.790208097,
+            "total_compression_time_sec": 357.232927195,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 346.28657372600014,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "combined_100mb.py:Qwen/Qwen3-0.6B|ctx=1000|ret=100|n=500000|kv=True|batch=64": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 7812,
+            "chunk_size": -1,
+            "original_size_bits": 15976392,
+            "arithmetic_code_size_bits": 1336349,
+            "bitmap_size_bits": 117968,
+            "final_size_bits": 1454317,
+            "pure_compression_ratio_percent": 8.364523103839716,
+            "compression_ratio_percent": 9.102912597537667,
+            "tokenize_time_sec": 3.5367184449996785,
+            "inference_time_sec": 977.8692980780002,
+            "total_compression_time_sec": 985.9453823299996,
+            "input_tokens_count": 265214592
+        },
+        "decompression": {
+            "decompression_time_sec": 972.869450956,
+            "input_tokens_cnt": 265214592
+        }
+    },
+    "text8:Qwen/Qwen2.5-0.5B|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 20726256,
+            "arithmetic_code_size_bits": 2458765,
+            "bitmap_size_bits": 130064,
+            "final_size_bits": 2588829,
+            "pure_compression_ratio_percent": 11.863044632856026,
+            "compression_ratio_percent": 12.490577169364308,
+            "tokenize_time_sec": 3.5578888780000852,
+            "inference_time_sec": 368.70638445999975,
+            "total_compression_time_sec": 382.1258269120008,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 361.22735583900067,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "text8:Qwen/Qwen3-0.6B|ctx=1000|ret=100|n=500000|kv=True|batch=64": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 7812,
+            "chunk_size": -1,
+            "original_size_bits": 20726256,
+            "arithmetic_code_size_bits": 2748294,
+            "bitmap_size_bits": 130064,
+            "final_size_bits": 2878358,
+            "pure_compression_ratio_percent": 13.259963594003663,
+            "compression_ratio_percent": 13.887496130511945,
+            "tokenize_time_sec": 3.395173936998617,
+            "inference_time_sec": 993.3180337389986,
+            "total_compression_time_sec": 1010.5228036899989,
+            "input_tokens_count": 265214592
+        },
+        "decompression": {
+            "decompression_time_sec": 989.4615105800003,
+            "input_tokens_cnt": 265214592
+        }
+    },
+    "combined_100mb.py:Qwen/Qwen3-8B|ctx=1000|ret=100|n=500000|kv=True|batch=16": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 31250,
+            "chunk_size": -1,
+            "original_size_bits": 15976392,
+            "arithmetic_code_size_bits": 1081192,
+            "bitmap_size_bits": 117968,
+            "final_size_bits": 1199160,
+            "pure_compression_ratio_percent": 6.767435350860194,
+            "compression_ratio_percent": 7.505824844558146,
+            "tokenize_time_sec": 3.6510258029993565,
+            "inference_time_sec": 3554.187291874001,
+            "total_compression_time_sec": 3685.149276007998,
+            "input_tokens_count": 272420400
+        },
+        "decompression": {
+            "decompression_time_sec": 3550.2651751330013,
+            "input_tokens_cnt": 272420400
+        }
+    },
+    "text8:distilgpt2|ctx=1000|ret=100|n=500000|kv=True|batch=256": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 1953,
+            "chunk_size": -1,
+            "original_size_bits": 20182400,
+            "arithmetic_code_size_bits": 3243084,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 3308748,
+            "pure_compression_ratio_percent": 16.06887188837799,
+            "compression_ratio_percent": 16.394224671000476,
+            "tokenize_time_sec": 3.1547455090003496,
+            "inference_time_sec": 257.22663329400166,
+            "total_compression_time_sec": 263.5799340019985,
+            "input_tokens_count": 256225536
+        },
+        "decompression": {
+            "decompression_time_sec": 261.79773338999803,
+            "input_tokens_cnt": 256225536
+        }
+    },
+    "text8:distilgpt2|ctx=100|ret=20|n=500000|kv=True|batch=512": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 976,
+            "chunk_size": -1,
+            "original_size_bits": 20182400,
+            "arithmetic_code_size_bits": 3510579,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 3576243,
+            "pure_compression_ratio_percent": 17.39425935468527,
+            "compression_ratio_percent": 17.719612137307752,
+            "tokenize_time_sec": 3.2672059550022823,
+            "inference_time_sec": 190.30222300099922,
+            "total_compression_time_sec": 196.81416164199982,
+            "input_tokens_count": 29192192
+        },
+        "decompression": {
+            "decompression_time_sec": 185.8244492699996,
+            "input_tokens_cnt": 29192192
+        }
+    },
+    "text8:distilgpt2|ctx=10|ret=3|n=500000|kv=True|batch=512": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 976,
+            "chunk_size": -1,
+            "original_size_bits": 20182400,
+            "arithmetic_code_size_bits": 4176962,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 4242626,
+            "pure_compression_ratio_percent": 20.69606191533217,
+            "compression_ratio_percent": 21.021414697954654,
+            "tokenize_time_sec": 3.266142165997735,
+            "inference_time_sec": 269.071539356999,
+            "total_compression_time_sec": 275.48486117599896,
+            "input_tokens_count": 2992128
+        }
+    },
+    "text8:distilgpt2|ctx=10|ret=2|n=500000|kv=True|batch=256": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 1953,
+            "chunk_size": -1,
+            "original_size_bits": 20182400,
+            "arithmetic_code_size_bits": 4238727,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 4304391,
+            "pure_compression_ratio_percent": 21.00209588552402,
+            "compression_ratio_percent": 21.327448668146502,
+            "tokenize_time_sec": 3.134843986998021,
+            "inference_time_sec": 288.0480939459994,
+            "total_compression_time_sec": 294.41478886099867,
+            "input_tokens_count": 2748672
+        },
+        "decompression": {
+            "decompression_time_sec": 296.2101244439982,
+            "input_tokens_cnt": 2748672
+        }
+    },
+    "combined_100mb.py:distilgpt2|ctx=100|ret=20|n=500000|kv=True|batch=512": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 976,
+            "chunk_size": -1,
+            "original_size_bits": 8544184,
+            "arithmetic_code_size_bits": 2068719,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 2134383,
+            "pure_compression_ratio_percent": 24.212013692589018,
+            "compression_ratio_percent": 24.980536467847603,
+            "tokenize_time_sec": 4.083258515995112,
+            "inference_time_sec": 84.90701339600491,
+            "total_compression_time_sec": 92.0867326660009,
+            "input_tokens_count": 29192192
+        },
+        "decompression": {
+            "decompression_time_sec": 92.4179177640035,
+            "input_tokens_cnt": 29192192
+        }
+    },
+    "text8:Qwen/Qwen3-8B|ctx=1000|ret=100|n=500000|kv=True|batch=16": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 31250,
+            "chunk_size": -1,
+            "original_size_bits": 20726256,
+            "arithmetic_code_size_bits": 2023053,
+            "bitmap_size_bits": 130064,
+            "final_size_bits": 2153117,
+            "pure_compression_ratio_percent": 9.760822215068655,
+            "compression_ratio_percent": 10.388354751576937,
+            "tokenize_time_sec": 3.707992190999903,
+            "inference_time_sec": 3561.86894898,
+            "total_compression_time_sec": 3693.643537234,
+            "input_tokens_count": 272420400
+        },
+        "decompression": {
+            "decompression_time_sec": 3641.8942846439995,
+            "input_tokens_cnt": 272420400
+        }
+    },
+    "combined_100mb.py:Qwen/Qwen2.5-7B|ctx=1000|ret=100|n=500000|kv=True|batch=16": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 31250,
+            "chunk_size": -1,
+            "original_size_bits": 15976392,
+            "arithmetic_code_size_bits": 936960,
+            "bitmap_size_bits": 117968,
+            "final_size_bits": 1054928,
+            "pure_compression_ratio_percent": 5.864653295938157,
+            "compression_ratio_percent": 6.603042789636109,
+            "tokenize_time_sec": 3.8137022519986203,
+            "inference_time_sec": 2719.7138551749995,
+            "total_compression_time_sec": 2843.6246154869987,
+            "input_tokens_count": 272420400
+        },
+        "decompression": {
+            "decompression_time_sec": 2744.542639376001,
+            "input_tokens_cnt": 272420400
+        }
+    },
+    "text8:Qwen/Qwen2.5-7B|ctx=1000|ret=100|n=500000|kv=True|batch=16": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 31250,
+            "chunk_size": -1,
+            "original_size_bits": 20726256,
+            "arithmetic_code_size_bits": 1728633,
+            "bitmap_size_bits": 130064,
+            "final_size_bits": 1858697,
+            "pure_compression_ratio_percent": 8.34030516654817,
+            "compression_ratio_percent": 8.967837703056452,
+            "tokenize_time_sec": 3.604057128999557,
+            "inference_time_sec": 2705.597228790997,
+            "total_compression_time_sec": 2714.6165243469986,
+            "input_tokens_count": 272420400
+        },
+        "decompression": {
+            "decompression_time_sec": 2702.550574172001,
+            "input_tokens_cnt": 272420400
+        }
+    },
+    "text8:Qwen/Qwen2.5-1.5B|ctx=1000|ret=100|n=500000|kv=True|batch=64": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 7812,
+            "chunk_size": -1,
+            "original_size_bits": 20726256,
+            "arithmetic_code_size_bits": 2088222,
+            "bitmap_size_bits": 130064,
+            "final_size_bits": 2218286,
+            "pure_compression_ratio_percent": 10.075249480658735,
+            "compression_ratio_percent": 10.702782017167017,
+            "tokenize_time_sec": 3.6604486359974544,
+            "inference_time_sec": 715.789416372998,
+            "total_compression_time_sec": 722.8268338329981,
+            "input_tokens_count": 265214592
+        },
+        "decompression": {
+            "decompression_time_sec": 709.4888307330002,
+            "input_tokens_cnt": 265214592
+        }
+    },
+    "combined_100mb.py:Qwen/Qwen2.5-1.5B|ctx=1000|ret=100|n=500000|kv=True|batch=64": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 7812,
+            "chunk_size": -1,
+            "original_size_bits": 15976392,
+            "arithmetic_code_size_bits": 1062513,
+            "bitmap_size_bits": 117968,
+            "final_size_bits": 1180481,
+            "pure_compression_ratio_percent": 6.650519090918651,
+            "compression_ratio_percent": 7.388908584616602,
+            "tokenize_time_sec": 3.9043215040001087,
+            "inference_time_sec": 706.488880355002,
+            "total_compression_time_sec": 712.6891963820017,
+            "input_tokens_count": 265214592
+        },
+        "decompression": {
+            "decompression_time_sec": 696.2216438050018,
+            "input_tokens_cnt": 265214592
+        }
+    },
+    "text8:Qwen/Qwen3-1.7B|ctx=1000|ret=100|n=500000|kv=True|batch=64": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 7812,
+            "chunk_size": -1,
+            "original_size_bits": 20726256,
+            "arithmetic_code_size_bits": 2478092,
+            "bitmap_size_bits": 130064,
+            "final_size_bits": 2608156,
+            "pure_compression_ratio_percent": 11.95629350520422,
+            "compression_ratio_percent": 12.583826041712504,
+            "tokenize_time_sec": 3.4121508629978052,
+            "inference_time_sec": 1080.850149916001,
+            "total_compression_time_sec": 1088.355303840999,
+            "input_tokens_count": 265214592
+        },
+        "decompression": {
+            "decompression_time_sec": 1075.4816098610027,
+            "input_tokens_cnt": 265214592
+        }
+    },
+    "combined_100mb.py:Qwen/Qwen3-1.7B|ctx=1000|ret=100|n=500000|kv=True|batch=64": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 7812,
+            "chunk_size": -1,
+            "original_size_bits": 15976392,
+            "arithmetic_code_size_bits": 1276904,
+            "bitmap_size_bits": 117968,
+            "final_size_bits": 1394872,
+            "pure_compression_ratio_percent": 7.992442849424325,
+            "compression_ratio_percent": 8.730832343122277,
+            "tokenize_time_sec": 3.6136829030001536,
+            "inference_time_sec": 1071.2441759089998,
+            "total_compression_time_sec": 1078.8591501480005,
+            "input_tokens_count": 265214592
+        },
+        "decompression": {
+            "decompression_time_sec": 1067.3034289690004,
+            "input_tokens_cnt": 265214592
+        }
+    },
+    "text8:meta-llama/Llama-3.2-1B|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 20753168,
+            "arithmetic_code_size_bits": 2165549,
+            "bitmap_size_bits": 131264,
+            "final_size_bits": 2296813,
+            "pure_compression_ratio_percent": 10.434787594838532,
+            "compression_ratio_percent": 11.067288618296734,
+            "tokenize_time_sec": 3.2532940460005193,
+            "inference_time_sec": 547.3667196099996,
+            "total_compression_time_sec": 552.8612447539999,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 531.9351996219993,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "combined_100mb.py:meta-llama/Llama-3.2-1B|ctx=1000|ret=100|n=500000|kv=True|batch=256": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 1953,
+            "chunk_size": -1,
+            "original_size_bits": 16110520,
+            "arithmetic_code_size_bits": 1192679,
+            "bitmap_size_bits": 121088,
+            "final_size_bits": 1313767,
+            "pure_compression_ratio_percent": 7.403106789849118,
+            "compression_ratio_percent": 8.15471505575239,
+            "tokenize_time_sec": 3.486344087999896,
+            "inference_time_sec": 560.9782065289983,
+            "total_compression_time_sec": 566.8427590849969,
+            "input_tokens_count": 256225536
+        },
+        "decompression": {
+            "decompression_time_sec": 540.4162555270013,
+            "input_tokens_cnt": 256225536
+        }
+    },
+    "text8:HuggingFaceTB/SmolLM2-135M|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 20406056,
+            "arithmetic_code_size_bits": 2563947,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 2629611,
+            "pure_compression_ratio_percent": 12.564637674227692,
+            "compression_ratio_percent": 12.88642450064824,
+            "tokenize_time_sec": 2.985466826998163,
+            "inference_time_sec": 338.49818494400097,
+            "total_compression_time_sec": 345.377898353996,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 343.0966526539996,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "text8:HuggingFaceTB/SmolLM-135M|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 20406056,
+            "arithmetic_code_size_bits": 2580957,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 2646621,
+            "pure_compression_ratio_percent": 12.647995281400776,
+            "compression_ratio_percent": 12.969782107821326,
+            "tokenize_time_sec": 3.002074285999697,
+            "inference_time_sec": 337.6949676449949,
+            "total_compression_time_sec": 343.88377934099844,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 350.9945665579944,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "combined_100mb.py:HuggingFaceTB/SmolLM2-135M|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 13287704,
+            "arithmetic_code_size_bits": 1195506,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 1261170,
+            "pure_compression_ratio_percent": 8.99708482368361,
+            "compression_ratio_percent": 9.491255976201758,
+            "tokenize_time_sec": 4.515897755001788,
+            "inference_time_sec": 293.32901136400324,
+            "total_compression_time_sec": 301.6762160240032,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 303.94347206100065,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "combined_100mb.py:HuggingFaceTB/SmolLM-135M|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 13287704,
+            "arithmetic_code_size_bits": 1192516,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 1258180,
+            "pure_compression_ratio_percent": 8.974582817317424,
+            "compression_ratio_percent": 9.468753969835571,
+            "tokenize_time_sec": 3.725369289997616,
+            "inference_time_sec": 292.0152461769976,
+            "total_compression_time_sec": 299.546814207999,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 298.60850740199385,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "text8:openai-community/gpt2|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 20182400,
+            "arithmetic_code_size_bits": 2911695,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 2977359,
+            "pure_compression_ratio_percent": 14.426901656889171,
+            "compression_ratio_percent": 14.752254439511653,
+            "tokenize_time_sec": 3.087210439996852,
+            "inference_time_sec": 273.4271002519963,
+            "total_compression_time_sec": 279.7849089989977,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 280.0495684760026,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "combined_100mb.py:openai-community/gpt2|ctx=1000|ret=100|n=500000|kv=True|batch=128": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 3906,
+            "chunk_size": -1,
+            "original_size_bits": 8544184,
+            "arithmetic_code_size_bits": 1395627,
+            "bitmap_size_bits": 65664,
+            "final_size_bits": 1461291,
+            "pure_compression_ratio_percent": 16.334233906947695,
+            "compression_ratio_percent": 17.102756682206284,
+            "tokenize_time_sec": 3.623173187006614,
+            "inference_time_sec": 185.37907768400328,
+            "total_compression_time_sec": 192.55197689200577,
+            "input_tokens_count": 259221888
+        },
+        "decompression": {
+            "decompression_time_sec": 185.8602836880018,
+            "input_tokens_cnt": 259221888
+        }
+    },
+    "text8:Qwen/Qwen2.5-0.5B|ctx=100|ret=10|n=500000|kv=True|batch=256": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 1953,
+            "chunk_size": -1,
+            "original_size_bits": 20726256,
+            "arithmetic_code_size_bits": 2784835,
+            "bitmap_size_bits": 130064,
+            "final_size_bits": 2914899,
+            "pure_compression_ratio_percent": 13.43626654037275,
+            "compression_ratio_percent": 14.063799076881034,
+            "tokenize_time_sec": 3.547467181000684,
+            "inference_time_sec": 159.12271264800074,
+            "total_compression_time_sec": 172.73553280000488,
+            "input_tokens_count": 26885376
+        },
+        "decompression": {
+            "decompression_time_sec": 166.22558806899906,
+            "input_tokens_cnt": 26885376
+        }
+    },
+    "combined_100mb.py:Qwen/Qwen2.5-0.5B|ctx=100|ret=10|n=500000|kv=True|batch=256": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 1953,
+            "chunk_size": -1,
+            "original_size_bits": 15976392,
+            "arithmetic_code_size_bits": 1572803,
+            "bitmap_size_bits": 117968,
+            "final_size_bits": 1690771,
+            "pure_compression_ratio_percent": 9.844544375225645,
+            "compression_ratio_percent": 10.582933868923597,
+            "tokenize_time_sec": 3.6223449089957285,
+            "inference_time_sec": 135.31456765099574,
+            "total_compression_time_sec": 142.4618744709951,
+            "input_tokens_count": 26885376
+        },
+        "decompression": {
+            "decompression_time_sec": 144.98858406000363,
+            "input_tokens_cnt": 26885376
+        }
+    },
+    "text8:Qwen/Qwen3-0.6B|ctx=100|ret=10|n=500000|kv=True|batch=256": {
+        "compression": {
+            "first_n_tokens": 500000,
+            "chunk_length": 1953,
+            "chunk_size": -1,
+            "original_size_bits": 20726256,
+            "arithmetic_code_size_bits": 3057094,
+            "bitmap_size_bits": 130064,
+            "final_size_bits": 3187158,
+            "pure_compression_ratio_percent": 14.749861238807432,
+            "compression_ratio_percent": 15.377393775315715,
+            "tokenize_time_sec": 3.550229586995556,
+            "inference_time_sec": 239.4267850949982,
+            "total_compression_time_sec": 257.06719349500054,
+            "input_tokens_count": 26885376
+        },
+        "decompression": {
+            "decompression_time_sec": 249.37333575700177,
+            "input_tokens_cnt": 26885376
+        }
+    }
+}

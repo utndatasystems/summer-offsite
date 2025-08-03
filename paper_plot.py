@@ -143,6 +143,25 @@ def results_plot_1(datasets, dataset_order):
     - Model compressors (with AC + Bitmap) as stacked bars.
     - Baseline compressors (no AC/Bitmap split) as single bars.
     """
+    model_order = [
+        "zip",
+        "gzip",
+        "zstd -3",
+        "zstd -1",
+        "zstd -19",
+        "distilgpt2",
+        "openai-community/gpt2",
+        "xz -9e (LZMA2)",
+        "Qwen/Qwen2.5-0.5B",
+        "Qwen/Qwen2.5-1.5B",
+        "Qwen/Qwen2.5-7B",
+        "Qwen/Qwen3-0.6B",
+        "Qwen/Qwen3-1.7B",
+        "Qwen/Qwen3-8B",
+        "meta-llama/Llama-3.2-1B",
+        "HuggingFaceTB/SmolLM-135M",
+        "HuggingFaceTB/SmolLM2-135M"
+    ]
     fig, axes = plt.subplots(1, len(dataset_order), figsize=(10, 6))
 
     if len(dataset_order) == 1:
@@ -157,12 +176,14 @@ def results_plot_1(datasets, dataset_order):
         ax.set_title(f"Compression Ratio Breakdown - {dataset}")
 
         models = list(comp_dict.keys())
+        models.sort(key=lambda m: model_order.index(m) if m in model_order else len(model_order))
         x = np.arange(len(models))
         bar_width = 0.6
 
         # Store values
         ac_ratios, bitmap_ratios, total_ratios, is_model_type = [], [], [], []
-        for comp_name, m in comp_dict.items():
+        for comp_name in models:
+            m = comp_dict[comp_name]
             orig = m["original_size_bits"]
             comp_size = m["compressed_size_bits"]
             total_ratios.append((comp_size / orig) * 100 if orig else 0)

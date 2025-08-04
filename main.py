@@ -148,7 +148,7 @@ def main():
         results_db[exp_key]["decompression"] = decomp_stats
         save_results(results_db)
 
-        print("\n\n===== Compression Results =====")
+        print("\n\n===== Decompression Results =====")
         for k, v in decomp_stats.items():
             print(f"{k}: {v}")
         # print(f"{results[:100]} ... (truncated)")

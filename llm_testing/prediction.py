@@ -30,7 +30,7 @@ class TokenDataPreparer:
         print("Starting tokenization...")
         start_time = time.time()
         if args.first_n_tokens is not None:
-            truncated_data = " ".join(self.data.split(" ")[:self.args.first_n_tokens])
+            truncated_data = " ".join(self.data.split(" ", self.args.first_n_tokens)[:self.args.first_n_tokens])
             self.data_tokens = self.tokenizer.encode(truncated_data, truncation=True, max_length=self.args.first_n_tokens)
             if len(self.data_tokens) < self.args.first_n_tokens:
                 self.args.first_n_tokens = len(self.data_tokens)
@@ -185,10 +185,13 @@ class TokenPredictor:
             self._past_kv = None
             self._cached_context_len = 0
 
+        data_copy_time = 0
         with torch.inference_mode():
             if not enable_kv_cache:
                 # If not using cache, run the model on the full prompt every time.
+                t0_data_copy = time.perf_counter()
                 input_ids = torch.tensor(prompts, device=device)
+                data_copy_time += time.perf_counter() - t0_data_copy
                 outputs = self.model(input_ids, use_cache=enable_kv_cache)
                 # Ensure cache is cleared when not in use.
                 self._past_kv = None
@@ -200,14 +203,18 @@ class TokenPredictor:
 
                 if self._past_kv is None or reset_cache:
                     # Rebuild the cache from the full prompt.
+                    t0_data_copy = time.perf_counter()
                     input_ids = torch.tensor(prompts, device=device)
+                    data_copy_time += time.perf_counter() - t0_data_copy
                     outputs = self.model(input_ids, use_cache=True)
                     self._past_kv = outputs.past_key_values
                     self._cached_context_len = 0
                 else:
                     # Incremental step: process only the last token using the existing cache.
                     delta = [row[-1:] for row in prompts]
+                    t0_data_copy = time.perf_counter()
                     delta = torch.tensor(delta, device=device, dtype=torch.long)
+                    data_copy_time += time.perf_counter() - t0_data_copy
 
                     outputs = self.model(delta, past_key_values=self._past_kv, use_cache=True)
                     self._past_kv = outputs.past_key_values
@@ -216,9 +223,15 @@ class TokenPredictor:
             logits = outputs.logits[:, -1, :]
             if getattr(self, "reduce_tokens", False):
                 logits = logits.index_select(1, self.index_tensor.to(logits.device))
+            t0_softmax = time.perf_counter()
             probs = torch.softmax(logits, dim=-1)
+            softmax_time = time.perf_counter() - t0_softmax
 
-        return self.tokens_list, probs.cpu()
+        t0_data_copy = time.perf_counter()
+        probs = probs.cpu()
+        data_copy_time += time.perf_counter() - t0_data_copy
+
+        return self.tokens_list, probs, data_copy_time, softmax_time
 
     def get_token_info(self, prompt_tokens):
         """

@@ -19,8 +19,14 @@ Why Compress When You Have an Oracle? LLM-Powered Text Compression
 python3 datasets_download.py
 ```
 
-## Testing
+## Testing With text8
 ```
-python3 test.py
+python3 main.py --mode compress --input_path data/text8 --batch_size 16
 ```
-The results will be updated in `results.json`.
+The results will be updated in `results.json`. The performance metrics are:
+- `total_compression_time`: tokenization + LLM inference + AC
+- `tokenize_time`: tokenization
+- `compression_time`: LLM inference + AC
+- `inference_time`: LLM inference
+- `ac_time`: AC
+- `data_copy_time`: Time spent moving data between GPU and CPU

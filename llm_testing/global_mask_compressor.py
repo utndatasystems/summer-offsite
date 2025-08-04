@@ -61,8 +61,12 @@ def run_global_mask_compression(args):
     llm_compressor = LLMCompressor()
     token_predictor = TokenPredictor(args, bitmap_data=bitmask_data)
 
-    t0_infer = time.perf_counter()
     prompts = [[] for _ in range(args.batch_size)]
+    compression_time = time.perf_counter()
+    inference_time = 0
+    ac_time = 0
+    data_copy_time = 0
+    softmax_time = 0
     # Process each token in the dataset to compress it.
     for token_idx in range(chunk_length):
         print(f"\rProcessing batch {token_idx + 1}/{chunk_length}", end='')
@@ -76,41 +80,56 @@ def run_global_mask_compression(args):
         input_token_cnt += args.batch_size * len(prompts[0])
 
         # Run LLM inference
-        token_ids, probs_values = token_predictor.run_batched_inference(prompts)
-        actual_next_tokens = [batches[idx][token_idx+1] for idx in range(args.batch_size) if token_idx + 1 < batches_length[idx]]
-        actual_next_tokens = [token_ids.index(token) for token in actual_next_tokens]
+        t0_inference = time.perf_counter()
+        token_ids, probs_values, _data_copy_time, _softmax_time = token_predictor.run_batched_inference(prompts, args.use_kv_cache)
+        data_copy_time += _data_copy_time
+        softmax_time += _softmax_time
+        inference_time += time.perf_counter() - t0_inference
 
         # Provide the actual token's indexes and the probability distributions to the compressor.
+        actual_next_tokens = [batches[idx][token_idx+1] for idx in range(args.batch_size) if token_idx + 1 < batches_length[idx]]
+        actual_next_tokens = [token_ids.index(token) for token in actual_next_tokens]
+        t0_ac = time.perf_counter()
         for idx, probs in enumerate(probs_values.numpy()):
             if token_idx + 1 < batches_length[idx]:
                 llm_compressor.next_token(actual_next_tokens[idx], probs)
+        ac_time += time.perf_counter() - t0_ac
 
-    inference_time = time.perf_counter() - t0_infer
+    compression_time = time.perf_counter() - compression_time
 
     # Finalize the compression to get the bit string.
     bit_string = llm_compressor.compress()
+    total_compression_time = time.perf_counter() - t0_tokenize
     total_arithmetic_code_size = len(bit_string)
 
     # Calculate final size and compression ratio.
     final_size = total_arithmetic_code_size + total_bitmap_size
-    original_size = len(token_predictor.detokenize(data_tokens)) * 8
-
-    total_compression_time = time.perf_counter() - t0_tokenize
+    original_size_bytes = len(token_predictor.detokenize(data_tokens))
 
     return first_tokens, bit_string, bitmask_data, {
         "first_n_tokens": args.first_n_tokens,
         "chunk_length": chunk_length,
         "chunk_size": -1, # -1 indicates global mask, not chunking
-        "original_size_bits": original_size,
-        "arithmetic_code_size_bits": total_arithmetic_code_size,
-        "bitmap_size_bits": total_bitmap_size,
-        "final_size_bits": final_size,
-        "pure_compression_ratio_percent": total_arithmetic_code_size / original_size * 100,
-        "compression_ratio_percent": final_size / original_size * 100,
-        "tokenize_time_sec": tokenize_time,
-        "inference_time_sec": inference_time,
-        "total_compression_time_sec": total_compression_time,
-        "input_tokens_count": input_token_cnt
+        "original_size_bytes": original_size_bytes,
+        "arithmetic_code_size_bytes": total_arithmetic_code_size / 8,
+        "bitmap_size_bytes": total_bitmap_size / 8,
+        "final_size_bytes": final_size / 8,
+        "pure_compression_ratio_percent": total_arithmetic_code_size * 8 / original_size_bytes * 100,
+        "compression_ratio_percent": final_size * 8 / original_size_bytes * 100,
+        "input_tokens_count": input_token_cnt,
+        # Timings
+        "total_compression_time": total_compression_time,
+        "tokenize_time": tokenize_time,
+        "compression_time": compression_time,
+        "inference_time": inference_time,
+        "ac_time": ac_time,
+        "data_copy_time": data_copy_time,
+        "softmax_time": softmax_time,
+        # Throughput
+        "throughput_tokens_per_sec": input_token_cnt / total_compression_time,
+        "throughput_kibibytes_per_sec": original_size_bytes / 1024 / total_compression_time,
+        "inference_throughput_tokens_per_sec": input_token_cnt / inference_time,
+        "inference_throughput_kibibytes_per_sec": original_size_bytes / 1024 / inference_time,
     }, args
 
 def run_global_mask_decompression(

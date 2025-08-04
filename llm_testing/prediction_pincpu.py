@@ -30,7 +30,7 @@ class TokenDataPreparer:
         print("Starting tokenization...")
         start_time = time.time()
         if args.first_n_tokens is not None:
-            truncated_data = " ".join(self.data.split(" ")[:self.args.first_n_tokens])
+            truncated_data = " ".join(self.data.split(" ", self.args.first_n_tokens)[:self.args.first_n_tokens])
             self.data_tokens = self.tokenizer.encode(truncated_data, truncation=True, max_length=self.args.first_n_tokens)
             if len(self.data_tokens) < self.args.first_n_tokens:
                 self.args.first_n_tokens = len(self.data_tokens)

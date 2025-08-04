@@ -107,7 +107,7 @@ def run_global_mask_compression(args):
     original_size_bytes = len(token_predictor.detokenize(data_tokens))
 
     return first_tokens, bit_string, bitmask_data, {
-        "first_n_tokens": args.first_n_tokens,
+        "args": args.__dict__,
         "chunk_length": chunk_length,
         "chunk_size": -1, # -1 indicates global mask, not chunking
         "original_size_bytes": original_size_bytes,

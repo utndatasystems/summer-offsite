@@ -1,0 +1,11 @@
+compressor,size,time,comment
+Uncompressed,100000000,,
+lz4,54591360,0.37,time lz4 -k text8 && du -b text8.lz4
+fsst,48111129,0.46,time ./fsst/fsst text8 text8.fsst && du -b text8.fsst
+lz4 -9,39443157,6.30,time lz4 -k text8 && du -b text8.lz4
+zip,33182194,6.73,time zip text8.zip text8 && du -b text8.zip
+gzip,33182058,6.60,time gzip -k text8 && du -b text8.gz
+zstd,32693862,1.10,time zstd -k text8 && du -b text8.zst
+zstd -19,24545481,108.01,time zstd -19 -k text8 && du -b text8.zst
+xz,24453576,95.00,time xz -k text8 && du -b text8.xz
+qwen2.5 0.5B,14063799,833.414,

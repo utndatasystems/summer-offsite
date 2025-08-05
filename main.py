@@ -23,7 +23,7 @@ def save_results(results):
 def make_key(args):
     """Generate a unique key for experiment settings."""
     filename = os.path.basename(args.input_path)
-    return f"{filename}:{args.model_name}|ctx={args.context_length}|ret={args.retain_tokens}|n={args.first_n_tokens}|kv={args.use_kv_cache}|batch={args.batch_size}"
+    return f"{filename}:{args.model_name}|ctx={args.context_length}|ret={args.retain_tokens}|n={args.first_n_tokens}|kv={args.use_kv_cache}|batch={args.batch_size}|reduce={args.reduce_tokens}"
 
 def main():
     # ========================
@@ -40,7 +40,9 @@ def main():
     parser.add_argument("--first_n_tokens", type=int, default=10000, help="Number of tokens to compress")
     parser.add_argument("--use_kv_cache", action="store_true", help="Enable KV cache for compression")
     parser.add_argument("--text_input", type=str, required=False, help="The direct text input for LLM inference.")
-    parser.add_argument("--reduce_tokens", type=bool, default=True, help="Whether to restrict the token space to distinct tokens in the input data.")
+    parser.add_argument("--reduce_tokens", action="store_true", help="Restrict token space")
+    parser.add_argument("--no_reduce_tokens", dest="reduce_tokens", action="store_false", help="Disable token space restriction")
+    parser.set_defaults(reduce_tokens=True)
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size for LLM inference")
 
     args = parser.parse_args()

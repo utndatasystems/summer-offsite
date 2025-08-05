@@ -67,6 +67,7 @@ def run_global_mask_compression(args):
     ac_time = 0
     data_copy_time = 0
     softmax_time = 0
+    entropy = 0.0
     # Process each token in the dataset to compress it.
     for token_idx in range(chunk_length):
         print(f"\rProcessing batch {token_idx + 1}/{chunk_length}", end='')
@@ -93,6 +94,7 @@ def run_global_mask_compression(args):
         for idx, probs in enumerate(probs_values.numpy()):
             if token_idx + 1 < batches_length[idx]:
                 llm_compressor.next_token(actual_next_tokens[idx], probs)
+                entropy += -(np.log2(probs[actual_next_tokens[idx]]))
         ac_time += time.perf_counter() - t0_ac
 
     compression_time = time.perf_counter() - compression_time
@@ -117,6 +119,7 @@ def run_global_mask_compression(args):
         "pure_compression_ratio_percent": total_arithmetic_code_size * 8 / original_size_bytes * 100,
         "compression_ratio_percent": final_size * 8 / original_size_bytes * 100,
         "input_tokens_count": input_token_cnt,
+        "entropy": entropy,
         # Timings
         "total_compression_time": total_compression_time,
         "tokenize_time": tokenize_time,
@@ -193,7 +196,7 @@ def run_global_mask_decompression(
 
         input_tokens_cnt += args.batch_size * len(prompts[0])
         # Run LLM inference
-        _, probs_values = token_predictor.run_batched_inference(prompts)
+        _, probs_values, _, _ = token_predictor.run_batched_inference(prompts)
 
         # Provide the actual token's indexes and the probability distributions to the compressor.
         for idx, probs in enumerate(probs_values.numpy()):

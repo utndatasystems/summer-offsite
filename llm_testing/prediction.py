@@ -82,8 +82,8 @@ class TokenDataPreparer:
         Returns:
             BitMap: A BitMap object representing the reduced token set.
         """
-        if not self.reduce_tokens:
-            raise ValueError("Bitmap only available when reduce_tokens is True.")
+        # if not self.reduce_tokens:
+        #     print("Warning: Bitmap only available when reduce_tokens is True.")
 
         # Create a BitMap from the tokens list
         bitmap = BitMap(self.tokens_list)

@@ -1,5 +1,5 @@
 compressor,size,time,comment
-Uncompressed,100000000,,
+uncompressed,100000000,,
 lz4,54591360,0.24,time lz4 -k text8 && du -b text8.lz4
 fsst,48111129,0.34,time ./fsst/fsst text8 text8.fsst && du -b text8.fsst
 lz4 -9,39443157,4.14,time lz4 -k -9 text8 && du -b text8.lz4

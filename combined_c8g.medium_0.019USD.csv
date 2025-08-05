@@ -1,0 +1,12 @@
+compressor,size,time,comment
+Uncompressed,100000000,,
+fsst,55283011,0.34,time ./fsst/fsst combined combined.fsst && du -b combined.fsst
+lz4,46483401,0.22,time lz4 -k combined && du -b combined.lz4
+lz4 -9,34409685,3.27,time lz4 -k -9 combined && du -b combined.lz4
+zip,28782574,3.00,time zip combined.zip combined && du -b combined.zip
+gzip,28782435,2.96,time gzip -k combined && du -b combined.gz
+zstd,28401100,0.46,time zstd -k combined && du -b combined.zst
+zstd -19,20229786,62.76,time zstd -19 -k combined && du -b combined.zst
+xz,19979228,60.65,time xz -k combined && du -b combined.xz
+xz -9e,18091000,88.93,time xz -9e -k combined && du -b combined.xz
+

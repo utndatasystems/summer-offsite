@@ -116,10 +116,10 @@ def run_global_mask_compression(args):
         "arithmetic_code_size_bytes": total_arithmetic_code_size / 8,
         "bitmap_size_bytes": total_bitmap_size / 8,
         "final_size_bytes": final_size / 8,
-        "pure_compression_ratio_percent": total_arithmetic_code_size * 8 / original_size_bytes * 100,
-        "compression_ratio_percent": final_size * 8 / original_size_bytes * 100,
+        "pure_compression_factor": original_size_bytes / (total_arithmetic_code_size / 8),
+        "compression_factor": original_size_bytes / (final_size / 8),
         "input_tokens_count": input_token_cnt,
-        "entropy": entropy,
+        "entropy": float(entropy),
         # Timings
         "total_compression_time": total_compression_time,
         "tokenize_time": tokenize_time,

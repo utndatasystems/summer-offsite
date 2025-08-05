@@ -107,8 +107,25 @@ class TokenPredictor:
 
         # Load tokenizer and model from cache or download
         self.tokenizer = AutoTokenizer.from_pretrained(args.model_name, cache_dir=".cache")
-        self.model = AutoModelForCausalLM.from_pretrained(args.model_name, cache_dir=".cache", device_map="auto")
-        self.model.eval()  # Set model to evaluation mode
+
+        # Pick dtype based on model name
+        if "FP8" in args.model_name.upper():
+            dtype = torch.float8_e4m3fn
+        else:
+            dtype = "auto"  # Let HF auto-detect dtype for non-FP8 models
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            args.model_name,
+            cache_dir=".cache",
+            torch_dtype=dtype,
+            device_map="auto"
+        )
+
+        # If FP8 model, enable Transformer Engine acceleration
+        if dtype == torch.float8_e4m3fn:
+            self.model = self.model.to_bettertransformer()
+
+        self.model.eval()
 
         # --- If bitmap_data is provided, reconstruct tokens_list & index_tensor ---
         if bitmap_data is not None:

@@ -3,7 +3,7 @@ from llm_testing.prediction import TokenDataPreparer, TokenPredictor
 from itertools import chain
 import numpy as np
 import time
-import math
+import torch
 
 def run_global_mask_compression(args):
     """
@@ -91,7 +91,7 @@ def run_global_mask_compression(args):
         actual_next_tokens = [batches[idx][token_idx+1] for idx in range(args.batch_size) if token_idx + 1 < batches_length[idx]]
         actual_next_tokens = [token_ids.index(token) for token in actual_next_tokens]
         t0_ac = time.perf_counter()
-        for idx, probs in enumerate(probs_values.numpy()):
+        for idx, probs in enumerate(probs_values.to(torch.float32).numpy()):
             if token_idx + 1 < batches_length[idx]:
                 llm_compressor.next_token(actual_next_tokens[idx], probs)
                 entropy += -(np.log2(probs[actual_next_tokens[idx]]))

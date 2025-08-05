@@ -6,9 +6,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-BATCH_SIZES = [1, 4, 16, 64, 256]
-CONTEXT_LENGTHS = [100, 500, 1000, 5000]
-NUM_TOKENS = 1000
+BATCH_SIZES = [4, 16, 64, 256]
+CONTEXT_LENGTHS = [128, 256, 512, 1024]
+NUM_TOKENS = 1_000_000
 
 
 def plot(metric, title, label, figname):
@@ -24,7 +24,7 @@ def plot(metric, title, label, figname):
 
         batch_size = int(result["compression"]["args"]["batch_size"])
         context_length = int(result["compression"]["args"]["context_length"])
-        throughput = float(result["compression"][metric])
+        throughput = metric(result)
 
         rows.append({
             "context_len": context_length,
@@ -56,5 +56,21 @@ if __name__ == "__main__":
                 f"python main.py --input_path data/text8 --mode compress --batch_size {batch_size} --context_length {context_length} --first_n_tokens {NUM_TOKENS} --use_kv_cache"
             )
 
-    plot("throughput_tokens_per_sec", "Processed tokens/s", "token/s", "tokens_heatmap")
-    plot("throughput_kibibytes_per_sec", "Processed kB/s", "kB/s", "kb_heatmap")
+    plot(
+        lambda stats: float(stats["compression"]["inference_throughput_kibibytes_per_sec"]),
+        "Processed KiB/s",
+        "KiB/s",
+        "inference_throughput_heatmap"
+    )
+    plot(
+        lambda stats: float(stats["compression"]["compression_factor"]),
+        "Compression Factor",
+        "Factor",
+        "compression_factor_heatmap"
+    )
+    plot(
+        lambda stats: float(stats["compression"]["pure_compression_factor"]),
+        "Pure Compression Factor",
+        "Factor",
+        "pure_compression_factor_heatmap"
+    )

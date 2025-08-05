@@ -4,6 +4,8 @@ from itertools import chain
 import numpy as np
 import time
 import math
+import queue
+import threading
 
 def run_global_mask_compression(args):
     """
@@ -61,13 +63,26 @@ def run_global_mask_compression(args):
     llm_compressor = LLMCompressor()
     token_predictor = TokenPredictor(args, bitmap_data=bitmask_data)
 
+    q = queue.Queue()
+    def void_thread(q):
+        while True:
+            handle = q.get()
+            if handle is None:
+                break
+            _, event = handle
+            event.synchronize()
+            q.task_done()
+    void_thread = threading.Thread(target=void_thread, args=(q,), daemon=True)
+    void_thread.start()
+
     prompts = [[] for _ in range(args.batch_size)]
     compression_time = time.perf_counter()
     inference_time = 0
     ac_time = 0
     data_copy_time = 0
-    softmax_time = 0
+    softmax_time = 1
     entropy = 0.0
+
     # Process each token in the dataset to compress it.
     for token_idx in range(chunk_length):
         print(f"\rProcessing batch {token_idx + 1}/{chunk_length}", end='')
@@ -82,20 +97,11 @@ def run_global_mask_compression(args):
 
         # Run LLM inference
         t0_inference = time.perf_counter()
-        token_ids, probs_values, _data_copy_time, _softmax_time = token_predictor.run_batched_inference(prompts, args.use_kv_cache)
+        handle, _data_copy_time = token_predictor.run_batched_inference_async(prompts, args.use_kv_cache)
         data_copy_time += _data_copy_time
-        softmax_time += _softmax_time
         inference_time += time.perf_counter() - t0_inference
 
-        # Provide the actual token's indexes and the probability distributions to the compressor.
-        actual_next_tokens = [batches[idx][token_idx+1] for idx in range(args.batch_size) if token_idx + 1 < batches_length[idx]]
-        actual_next_tokens = [token_ids.index(token) for token in actual_next_tokens]
-        t0_ac = time.perf_counter()
-        for idx, probs in enumerate(probs_values.numpy()):
-            if token_idx + 1 < batches_length[idx]:
-                llm_compressor.next_token(actual_next_tokens[idx], probs)
-                entropy += -(np.log2(probs[actual_next_tokens[idx]]))
-        ac_time += time.perf_counter() - t0_ac
+        q.put(handle)  # Add the handle to the queue for processing
 
     compression_time = time.perf_counter() - compression_time
 

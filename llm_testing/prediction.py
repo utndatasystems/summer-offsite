@@ -176,9 +176,7 @@ class TokenPredictor:
         """
         return self.tokens_list
 
-    def run_batched_inference(self, prompts, enable_kv_cache=True):
-        # TODO: Add documentation for this method
-
+    def run_batched_inference_async(self, prompts, enable_kv_cache=True):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         if not hasattr(self, "_past_kv"):
@@ -191,7 +189,7 @@ class TokenPredictor:
                 # If not using cache, run the model on the full prompt every time.
                 t0_data_copy = time.perf_counter()
                 input_ids = torch.tensor(prompts, device=device)
-                data_copy_time += time.perf_counter() - t0_data_copy
+                # data_copy_time += time.perf_counter() - t0_data_copy
                 outputs = self.model(input_ids, use_cache=enable_kv_cache)
                 # Ensure cache is cleared when not in use.
                 self._past_kv = None
@@ -205,7 +203,7 @@ class TokenPredictor:
                     # Rebuild the cache from the full prompt.
                     t0_data_copy = time.perf_counter()
                     input_ids = torch.tensor(prompts, device=device)
-                    data_copy_time += time.perf_counter() - t0_data_copy
+                    # data_copy_time += time.perf_counter() - t0_data_copy
                     outputs = self.model(input_ids, use_cache=True)
                     self._past_kv = outputs.past_key_values
                     self._cached_context_len = 0
@@ -214,7 +212,7 @@ class TokenPredictor:
                     delta = [row[-1:] for row in prompts]
                     t0_data_copy = time.perf_counter()
                     delta = torch.tensor(delta, device=device, dtype=torch.long)
-                    data_copy_time += time.perf_counter() - t0_data_copy
+                    # data_copy_time += time.perf_counter() - t0_data_copy
 
                     outputs = self.model(delta, past_key_values=self._past_kv, use_cache=True)
                     self._past_kv = outputs.past_key_values
@@ -225,13 +223,30 @@ class TokenPredictor:
                 logits = logits.index_select(1, self.index_tensor.to(logits.device))
             t0_softmax = time.perf_counter()
             probs = torch.softmax(logits, dim=-1)
-            softmax_time = time.perf_counter() - t0_softmax
+
+        if not torch.cuda.is_available():
+            return probs, None         # CPU-only fallback
 
         t0_data_copy = time.perf_counter()
-        probs = probs.cpu()
-        data_copy_time += time.perf_counter() - t0_data_copy
+        # Record when `probs` is ready on the producer stream
+        prod_stream = torch.cuda.current_stream()
+        ready_evt = torch.cuda.Event()
+        prod_stream.record_event(ready_evt)
 
-        return self.tokens_list, probs, data_copy_time, softmax_time
+        # Create the copy stream for asynchronous copy
+        if not hasattr(self, "_copy_stream"):
+            self._copy_stream = torch.cuda.Stream()
+
+        # Create a pinned CPU buffer and enqueue an async copy on a separate stream
+        host_buf = torch.empty(probs.size(), dtype=probs.dtype, device='cpu', pin_memory=True)
+        with torch.cuda.stream(self._copy_stream):
+            self._copy_stream.wait_event(ready_evt)
+            host_buf.copy_(probs, non_blocking=True)
+            done_evt = torch.cuda.Event()
+            self._copy_stream.record_event(done_evt)
+        data_copy_time = time.perf_counter() - t0_data_copy
+
+        return (host_buf, done_evt), data_copy_time
 
     def get_token_info(self, prompt_tokens):
         """

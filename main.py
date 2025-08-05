@@ -58,12 +58,12 @@ def main():
         # ========================
         # Check if experiment already exists
         # ========================
-        results_db = load_results()
-        exp_key = make_key(args)
-        if exp_key in results_db:
-            print(f"\n⚠️ Experiment already exists for {exp_key}, skipping run.")
-            print(f"Stored Results: {results_db[exp_key]}")
-            return
+        # results_db = load_results()
+        # exp_key = make_key(args)
+        # if exp_key in results_db:
+        #     print(f"\n⚠️ Experiment already exists for {exp_key}, skipping run.")
+        #     print(f"Stored Results: {results_db[exp_key]}")
+        #     return
 
         # ========================
         # Print experiment settings

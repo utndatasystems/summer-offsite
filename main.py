@@ -77,6 +77,42 @@ def main():
         print(f"  Use KV cache     : {args.use_kv_cache}")
         print(f"  Batch size       : {args.batch_size}")
 
+        if False:
+            from transformers import AutoTokenizer, AutoModelForCausalLM
+            from collections import Counter
+            import math
+            import gmpy2
+            tokenizer = AutoTokenizer.from_pretrained(args.model_name, cache_dir=".cache")
+            with open(args.input_path, "r", encoding="utf-8") as f:
+                data = f.read()
+            tokens = tokenizer.encode(data)
+            total_tokens = len(tokens)
+            print(f"\nTotal tokens in input data: {total_tokens}")
+            token_counts = Counter(tokens)
+            print("\nToken frequency (id: count):")
+            entropy = 0.0
+            for token_id, count in token_counts.items():
+                token_probability = count / total_tokens
+                entropy -= token_probability * math.log2(token_probability)
+            print(f"\nEntropy of token distribution: {entropy}")
+            print(f"So, based on the entropy, which is the average number of bits per token, we need at least {entropy * total_tokens} bits to encode the entire input data.")
+
+            print("now on a character basis:")
+            tokens = list(data)
+            total_tokens = len(tokens)
+            token_counts = Counter(tokens)
+            print(f"\nTotal tokens in input data: {total_tokens}")
+            token_counts = Counter(tokens)
+            print("\nToken frequency (id: count):")
+            entropy = gmpy2.mpfr(0.0)
+            for token_id, count in token_counts.items():
+                token_probability = gmpy2.mpfr(count) / gmpy2.mpfr(total_tokens)
+                entropy -= token_probability * gmpy2.log2(token_probability)
+            print(f"\nEntropy of token distribution: {entropy}")
+            print(f"So, based on the entropy, which is the average number of bits per token, we need at least {entropy * total_tokens} bits to encode the entire input data.")
+            
+            exit(0)
+
         # ========================
         # Run compression experiment
         # ========================
